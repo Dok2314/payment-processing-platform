@@ -35,3 +35,27 @@ func TestVersionHandler(t *testing.T) {
 		t.Fatalf("expected body %q, got %q", "1.0.0", w.Body.String())
 	}
 }
+
+func TestRouter(t *testing.T) {
+	r := newRouter()
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/health", nil)
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if w.Body.String() != "ok" {
+		t.Fatalf("expected body %q, got %q", "ok", w.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", "/unknown", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}
