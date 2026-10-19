@@ -1,8 +1,11 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
@@ -10,38 +13,28 @@ func main() {
 
 	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 }
 
 func versionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
 	w.Write([]byte("1.0.0"))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
 	w.Write([]byte("ok"))
 }
 
-func newRouter() *http.ServeMux {
-	mux := http.NewServeMux()
+func newRouter() chi.Router {
+	r := chi.NewRouter()
 
-	mux.HandleFunc("/health", healthHandler)
+	r.Use(middleware.Logger)
 
-	mux.HandleFunc("/version", versionHandler)
+	r.Get("/health", healthHandler)
 
-	return mux
+	r.Get("/version", versionHandler)
+
+	return r
 }
