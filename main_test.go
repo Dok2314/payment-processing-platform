@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +59,83 @@ func TestRouter(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}
+
+func TestCreatePaymentInvalidAmount(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"123","amount":-100,"currency":"USD"}`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestCreatePaymentMissingUserID(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"","amount":100,"currency":"USD"}`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestCreatePaymentMissingCurrency(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"123","amount":100.50,"currency":""}`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestCreatePaymentSuccess(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"123","amount":100.50,"currency":"USD"}`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, w.Code)
+	}
+
+	var payment Payment
+
+	if err := json.NewDecoder(w.Body).Decode(&payment); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if payment.ID == "" {
+		t.Fatal("expected payment ID to be non-empty")
+	}
+
+	if payment.UserID != "123" {
+		t.Fatalf("expected user_id %q, got %q", "123", payment.UserID)
+	}
+
+	if payment.Amount != 100.50 {
+		t.Fatalf("expected amount %v, got %v", 100.50, payment.Amount)
+	}
+
+	if payment.Currency != "USD" {
+		t.Fatalf("expected currency %q, got %q", "USD", payment.Currency)
 	}
 }
