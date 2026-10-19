@@ -39,7 +39,7 @@ func TestVersionHandler(t *testing.T) {
 }
 
 func TestRouter(t *testing.T) {
-	r := newRouter()
+	r := newRouter(NewPaymentStore())
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/health", nil)
 
@@ -68,7 +68,7 @@ func TestCreatePaymentInvalidAmount(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter()
+	r := newRouter(NewPaymentStore())
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -82,7 +82,7 @@ func TestCreatePaymentMissingUserID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter()
+	r := newRouter(NewPaymentStore())
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -96,7 +96,7 @@ func TestCreatePaymentMissingCurrency(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter()
+	r := newRouter(NewPaymentStore())
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -110,7 +110,7 @@ func TestCreatePaymentSuccess(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter()
+	r := newRouter(NewPaymentStore())
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
