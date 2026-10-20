@@ -24,5 +24,13 @@ func newRouter(store *PaymentStore) chi.Router {
 		getPaymentHandler(store, w, r)
 	})
 
+	r.Put("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		updatePaymentHandler(store, w, r)
+	})
+
+	r.Delete("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		deletePaymentHandler(store, w, r)
+	})
+
 	return r
 }
