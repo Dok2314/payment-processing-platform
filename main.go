@@ -8,7 +8,9 @@ import (
 func main() {
 	store := NewPaymentStore()
 
-	mux := newRouter(store)
+	service := NewPaymentService(store)
+
+	mux := newRouter(service)
 
 	err := http.ListenAndServe(":8080", mux)
 	if err != nil {

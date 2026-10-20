@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func newRouter(store *PaymentStore) chi.Router {
+func newRouter(service *PaymentService) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
@@ -17,19 +17,19 @@ func newRouter(store *PaymentStore) chi.Router {
 	r.Get("/version", versionHandler)
 
 	r.Post("/payments", func(w http.ResponseWriter, r *http.Request) {
-		createPaymentHandler(store, w, r)
+		createPaymentHandler(service, w, r)
 	})
 
 	r.Get("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		getPaymentHandler(store, w, r)
+		getPaymentHandler(service, w, r)
 	})
 
 	r.Put("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		updatePaymentHandler(store, w, r)
+		updatePaymentHandler(service, w, r)
 	})
 
 	r.Delete("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		deletePaymentHandler(store, w, r)
+		deletePaymentHandler(service, w, r)
 	})
 
 	return r

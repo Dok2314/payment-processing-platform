@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
 
 func versionHandler(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +17,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-func createPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Request) {
+func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	var payment PaymentRequest
 
 	err := json.NewDecoder(r.Body).Decode(&payment)
@@ -28,40 +27,22 @@ func createPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if payment.Amount <= 0 {
-		http.Error(w, "amount must be greater than zero", http.StatusBadRequest)
+	createdPayment, err := service.Create(payment)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	if payment.UserID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
-		return
-	}
-
-	if payment.Currency == "" {
-		http.Error(w, "currency is required", http.StatusBadRequest)
-		return
-	}
-
-	createdPayment := Payment{
-		UserID:   payment.UserID,
-		Amount:   payment.Amount,
-		Currency: payment.Currency,
-	}
-
-	createdPayment.ID = uuid.NewString()
-
-	store.Save(createdPayment)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(createdPayment)
 }
 
-func getPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Request) {
+func getPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	payment, ok := store.Get(id)
+	payment, ok := service.Get(id)
 	if !ok {
 		http.Error(w, "payment not found", http.StatusNotFound)
 		return
@@ -71,7 +52,7 @@ func getPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(payment)
 }
 
-func updatePaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Request) {
+func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var payment PaymentRequest
@@ -80,28 +61,15 @@ func updatePaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if payment.Amount <= 0 {
-		http.Error(w, "amount must be greater than zero", http.StatusBadRequest)
-		return
-	}
-	if payment.UserID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
-		return
-	}
-	if payment.Currency == "" {
-		http.Error(w, "currency is required", http.StatusBadRequest)
-		return
-	}
+	updatedPayment, err := service.Update(id, payment)
 
-	updatedPayment := Payment{
-		ID:       id,
-		UserID:   payment.UserID,
-		Amount:   payment.Amount,
-		Currency: payment.Currency,
-	}
+	if err != nil {
+		if err.Error() == "payment not found" {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 
-	if !store.Update(updatedPayment) {
-		http.Error(w, "payment not found", http.StatusNotFound)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -109,10 +77,10 @@ func updatePaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Re
 	json.NewEncoder(w).Encode(updatedPayment)
 }
 
-func deletePaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Request) {
+func deletePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if !store.Delete(id) {
+	if !service.Delete(id) {
 		http.Error(w, "payment not found", http.StatusNotFound)
 		return
 	}
