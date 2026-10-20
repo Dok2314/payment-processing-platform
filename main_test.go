@@ -39,7 +39,9 @@ func TestVersionHandler(t *testing.T) {
 }
 
 func TestRouter(t *testing.T) {
-	r := newRouter(NewPaymentStore())
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/health", nil)
 
@@ -68,7 +70,9 @@ func TestCreatePaymentInvalidAmount(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter(NewPaymentStore())
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -82,7 +86,9 @@ func TestCreatePaymentMissingUserID(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter(NewPaymentStore())
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -96,7 +102,9 @@ func TestCreatePaymentMissingCurrency(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter(NewPaymentStore())
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
@@ -110,7 +118,9 @@ func TestCreatePaymentSuccess(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter(NewPaymentStore())
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
@@ -164,7 +174,8 @@ func TestPaymentStoreGet(t *testing.T) {
 
 func TestGetPaymentNotFound(t *testing.T) {
 	store := NewPaymentStore()
-	r := newRouter(store)
+	service := NewPaymentService(store)
+	r := newRouter(service)
 
 	req := httptest.NewRequest("GET", "/payments/nonexistent", nil)
 	w := httptest.NewRecorder()
@@ -178,6 +189,7 @@ func TestGetPaymentNotFound(t *testing.T) {
 
 func TestGetPaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
+	service := NewPaymentService(store)
 
 	payment := Payment{
 		ID:       "payment-123",
@@ -187,7 +199,7 @@ func TestGetPaymentSuccess(t *testing.T) {
 	}
 	store.Save(payment)
 
-	r := newRouter(store)
+	r := newRouter(service)
 	req := httptest.NewRequest("GET", "/payments/payment-123", nil)
 	w := httptest.NewRecorder()
 
@@ -209,6 +221,7 @@ func TestGetPaymentSuccess(t *testing.T) {
 
 func TestUpdatePaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
+	service := NewPaymentService(store)
 
 	store.Save(Payment{
 		ID:       "payment-123",
@@ -222,7 +235,7 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	w := httptest.NewRecorder()
-	r := newRouter(store)
+	r := newRouter(service)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -244,7 +257,8 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 
 func TestUpdatePaymentNotFound(t *testing.T) {
 	store := NewPaymentStore()
-	r := newRouter(store)
+	service := NewPaymentService(store)
+	r := newRouter(service)
 
 	body := strings.NewReader(`{"user_id":"user-123","amount":100,"currency":"USD"}`)
 	req := httptest.NewRequest("PUT", "/payments/nonexistent", body)
@@ -260,6 +274,7 @@ func TestUpdatePaymentNotFound(t *testing.T) {
 
 func TestDeletePaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
+	service := NewPaymentService(store)
 	store.Save(Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
@@ -267,7 +282,7 @@ func TestDeletePaymentSuccess(t *testing.T) {
 		Currency: "USD",
 	})
 
-	r := newRouter(store)
+	r := newRouter(service)
 	req := httptest.NewRequest("DELETE", "/payments/payment-123", nil)
 	w := httptest.NewRecorder()
 
@@ -285,7 +300,8 @@ func TestDeletePaymentSuccess(t *testing.T) {
 
 func TestDeletePaymentNotFound(t *testing.T) {
 	store := NewPaymentStore()
-	r := newRouter(store)
+	service := NewPaymentService(store)
+	r := newRouter(service)
 
 	req := httptest.NewRequest("DELETE", "/payments/nonexistent", nil)
 	w := httptest.NewRecorder()
