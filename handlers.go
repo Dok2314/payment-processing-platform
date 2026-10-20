@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -55,4 +56,17 @@ func createPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(createdPayment)
+}
+
+func getPaymentHandler(store *PaymentStore, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, ok := store.Get(id)
+	if !ok {
+		http.Error(w, "payment not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
 }

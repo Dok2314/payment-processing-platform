@@ -139,3 +139,70 @@ func TestCreatePaymentSuccess(t *testing.T) {
 		t.Fatalf("expected currency %q, got %q", "USD", payment.Currency)
 	}
 }
+
+func TestPaymentStoreGet(t *testing.T) {
+	store := NewPaymentStore()
+
+	payment := Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+	}
+
+	store.Save(payment)
+
+	got, ok := store.Get("payment-123")
+	if !ok {
+		t.Fatal("expected payment to exist")
+	}
+
+	if got != payment {
+		t.Fatalf("expected %+v, got %+v", payment, got)
+	}
+}
+
+func TestGetPaymentNotFound(t *testing.T) {
+	store := NewPaymentStore()
+	r := newRouter(store)
+
+	req := httptest.NewRequest("GET", "/payments/nonexistent", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}
+
+func TestGetPaymentSuccess(t *testing.T) {
+	store := NewPaymentStore()
+
+	payment := Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+	}
+	store.Save(payment)
+
+	r := newRouter(store)
+	req := httptest.NewRequest("GET", "/payments/payment-123", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	var got Payment
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if got != payment {
+		t.Fatalf("expected %+v, got %+v", payment, got)
+	}
+}

@@ -32,3 +32,11 @@ func (s *PaymentStore) Save(payment Payment) {
 
 	s.payments[payment.ID] = payment
 }
+
+func (s *PaymentStore) Get(id string) (Payment, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	return payment, ok
+}
