@@ -80,6 +80,22 @@ func TestCreatePaymentInvalidAmount(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentInvalidJSON(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"123","amount":-100,"currency":here invalid`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
 func TestCreatePaymentMissingUserID(t *testing.T) {
 	body := strings.NewReader(`{"user_id":"","amount":100,"currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
@@ -310,5 +326,102 @@ func TestDeletePaymentNotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}
+
+func TestUpdatePaymentInvalidAmount(t *testing.T) {
+	store := NewPaymentStore()
+
+	payment := Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+	}
+
+	store.Save(payment)
+
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	body := strings.NewReader(`{"user_id":"user-321","amount":-100,"currency":"EUR"}`)
+	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	payment, ok := store.Get("payment-123")
+	if !ok {
+		t.Fatalf("expected payment to still exist")
+	}
+
+	if payment.Amount != 100.50 {
+		t.Fatalf("expected amount %.2f, got %.2f", 100.50, payment.Amount)
+	}
+}
+
+func TestUpdatePaymentInvalidJSON(t *testing.T) {
+	payment := Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+	}
+
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	store.Save(payment)
+
+	body := strings.NewReader(`"{user_id: "user-321", "amount": 50, "currency":"USD"invalid"`)
+	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	payment, ok := store.Get("payment-123")
+	if !ok {
+		t.Fatalf("expected payment to still exist")
+	}
+
+	if payment.Amount != 100.50 {
+		t.Fatalf("expected payment amount = %.2f", 100.50)
+	}
+
+	if payment.UserID != "user-123" {
+		t.Fatalf("expected payment user id = %s", "user-123")
+	}
+
+	if payment.Currency != "USD" {
+		t.Fatalf("expected payment currency = %s", "USD")
+	}
+}
+
+func TestCreatePaymentInvalidAmountType(t *testing.T) {
+	body := strings.NewReader(`{"user_id":"123","amount":"ABC","currency":"USD"}`)
+	req := httptest.NewRequest("POST", "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }

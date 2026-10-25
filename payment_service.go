@@ -2,9 +2,13 @@ package main
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 )
+
+var ErrPaymentNotFound = errors.New("payment not found")
+var ErrInvalidPayment = errors.New("invalid payment")
 
 type PaymentService struct {
 	store *PaymentStore
@@ -17,14 +21,8 @@ func NewPaymentService(store *PaymentStore) *PaymentService {
 }
 
 func (s *PaymentService) Create(payment PaymentRequest) (Payment, error) {
-	if payment.Amount <= 0 {
-		return Payment{}, errors.New("amount must be greater than zero")
-	}
-	if payment.UserID == "" {
-		return Payment{}, errors.New("user_id is required")
-	}
-	if payment.Currency == "" {
-		return Payment{}, errors.New("currency is required")
+	if err := validatePayment(payment); err != nil {
+		return Payment{}, err
 	}
 
 	createdPayment := Payment{
@@ -45,14 +43,8 @@ func (s *PaymentService) Get(id string) (Payment, bool) {
 }
 
 func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, error) {
-	if payment.Amount <= 0 {
-		return Payment{}, errors.New("amount must be greater than zero")
-	}
-	if payment.UserID == "" {
-		return Payment{}, errors.New("user_id is required")
-	}
-	if payment.Currency == "" {
-		return Payment{}, errors.New("currency is required")
+	if err := validatePayment(payment); err != nil {
+		return Payment{}, err
 	}
 
 	updatedPayment := Payment{
@@ -63,7 +55,7 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 	}
 
 	if !s.store.Update(updatedPayment) {
-		return Payment{}, errors.New("payment not found")
+		return Payment{}, ErrPaymentNotFound
 	}
 
 	return updatedPayment, nil
@@ -71,4 +63,17 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 
 func (s *PaymentService) Delete(id string) bool {
 	return s.store.Delete(id)
+}
+
+func validatePayment(payment PaymentRequest) error {
+	if payment.Amount <= 0 {
+		return fmt.Errorf("%w: amount must be greater than zero", ErrInvalidPayment)
+	}
+	if payment.UserID == "" {
+		return fmt.Errorf("%w: user_id is required", ErrInvalidPayment)
+	}
+	if payment.Currency == "" {
+		return fmt.Errorf("%w: currency is required", ErrInvalidPayment)
+	}
+	return nil
 }

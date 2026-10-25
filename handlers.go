@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -30,7 +32,13 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	createdPayment, err := service.Create(payment)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, ErrInvalidPayment) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("create payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -64,12 +72,18 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	updatedPayment, err := service.Update(id, payment)
 
 	if err != nil {
-		if err.Error() == "payment not found" {
+		if errors.Is(err, ErrPaymentNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, ErrInvalidPayment) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("update payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
