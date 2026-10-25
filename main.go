@@ -21,18 +21,6 @@ func newServer(handler http.Handler) *http.Server {
 }
 
 func runServer(server *http.Server) error {
-	return server.ListenAndServe()
-}
-
-func main() {
-	store := NewPaymentStore()
-
-	service := NewPaymentService(store)
-
-	mux := newRouter(service)
-
-	server := newServer(mux)
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	serverStopped := make(chan struct{})
@@ -62,14 +50,30 @@ func main() {
 		}
 	}()
 
-	err := runServer(server)
+	err := server.ListenAndServe()
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Printf("Server error: %v", err)
 		close(serverStopped)
 		wg.Wait()
-		return
+		return err
 	}
 
 	wg.Wait()
+	return err
+}
+
+func main() {
+	store := NewPaymentStore()
+
+	service := NewPaymentService(store)
+
+	mux := newRouter(service)
+
+	server := newServer(mux)
+
+	err := runServer(server)
+
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
