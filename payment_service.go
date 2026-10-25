@@ -20,7 +20,7 @@ func NewPaymentService(store *PaymentStore) *PaymentService {
 	}
 }
 
-func (s *PaymentService) Create(payment PaymentRequest) (Payment, error) {
+func (s *PaymentService) Create(key string, payment PaymentRequest) (Payment, error) {
 	if err := validatePayment(payment); err != nil {
 		return Payment{}, err
 	}
@@ -33,9 +33,7 @@ func (s *PaymentService) Create(payment PaymentRequest) (Payment, error) {
 
 	createdPayment.ID = uuid.NewString()
 
-	s.store.Save(createdPayment)
-
-	return createdPayment, nil
+	return s.store.CreateIdempotent(key, createdPayment)
 }
 
 func (s *PaymentService) Get(id string) (Payment, bool) {

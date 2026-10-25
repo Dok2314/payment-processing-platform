@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -132,6 +134,7 @@ func TestCreatePaymentSuccess(t *testing.T) {
 	body := strings.NewReader(`{"user_id":"123","amount":100.50,"currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-order-123")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -423,5 +426,98 @@ func TestCreatePaymentInvalidAmountType(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestCreateIdempotent(t *testing.T) {
+	store := NewPaymentStore()
+
+	first := Payment{
+		ID:       "payment-1",
+		UserID:   "123",
+		Amount:   100.50,
+		Currency: "USD",
+	}
+
+	fp, err := store.CreateIdempotent("order-123", first)
+	if err != nil {
+		t.Fatalf("first CreateIdempotent() error: %v", err)
+	}
+
+	second := Payment{
+		ID:       "payment-2",
+		UserID:   "123",
+		Amount:   200,
+		Currency: "USD",
+	}
+
+	sp, err := store.CreateIdempotent("order-123", second)
+	if err != nil {
+		t.Fatalf("second CreateIdempotent() error: %v", err)
+	}
+
+	if fp.ID != sp.ID {
+		t.Fatalf("payment IDs differ: first=%q, second=%q", fp.ID, sp.ID)
+	}
+
+	if sp.Amount != 100.50 {
+		t.Fatalf("unexpected amount: got=%v, want=100.50", sp.Amount)
+	}
+
+	if sp.ID != "payment-1" {
+		t.Fatalf("unexpected payment ID: got=%q, want=%q", sp.ID, "payment-1")
+	}
+}
+
+func TestCreateIdempotentConcurrent(t *testing.T) {
+	store := NewPaymentStore()
+	var wg sync.WaitGroup
+	results := make(chan string, 100)
+
+	wg.Add(100)
+
+	for i := 0; i < 100; i++ {
+		go func(i int) {
+			defer wg.Done()
+
+			payment := Payment{
+				ID:       fmt.Sprintf("payment-%d", i),
+				UserID:   "123",
+				Amount:   100.50,
+				Currency: "USD",
+			}
+
+			p, err := store.CreateIdempotent("order-123", payment)
+			if err != nil {
+				t.Errorf("CreateIdempotent: %v", err)
+				return
+			}
+
+			results <- p.ID
+		}(i)
+	}
+
+	wg.Wait()
+	close(results)
+
+	if len(store.idempotencyKeys) != 1 {
+		t.Fatalf("expected 1 idempotency key, got %d", len(store.idempotencyKeys))
+	}
+
+	if len(store.payments) != 1 {
+		t.Fatalf("expected 1 payment, got %d", len(store.payments))
+	}
+
+	var firstID string
+
+	for id := range results {
+		if firstID == "" {
+			firstID = id
+			continue
+		}
+
+		if id != firstID {
+			t.Fatalf("expected same payment ID, got %s and %s", firstID, id)
+		}
 	}
 }

@@ -20,6 +20,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	key := r.Header.Get("Idempotency-Key")
+	if key == "" {
+		http.Error(w, "invalid header", http.StatusBadRequest)
+		return
+	}
+
 	var payment PaymentRequest
 
 	err := json.NewDecoder(r.Body).Decode(&payment)
@@ -29,7 +35,7 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 		return
 	}
 
-	createdPayment, err := service.Create(payment)
+	createdPayment, err := service.Create(key, payment)
 
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
