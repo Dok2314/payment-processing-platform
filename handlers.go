@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -36,7 +37,8 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("create payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -80,7 +82,8 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("update payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
