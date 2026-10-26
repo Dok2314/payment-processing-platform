@@ -555,3 +555,49 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 		t.Fatalf("expected ErrPaymentCannotBeCancelled, got %v", err)
 	}
 }
+
+func TestUpdatePaymentCompletedConflict(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	store.Save(Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+		Status:   PaymentStatusCompleted,
+	})
+
+	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
+	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter(service)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+
+	payment, ok := store.Get("payment-123")
+	if !ok {
+		t.Fatal("expected completed payment to remain in store")
+	}
+
+	if payment.Amount != 100.50 {
+		t.Fatalf("expected payment amount = %.2f", 100.50)
+	}
+
+	if payment.UserID != "user-123" {
+		t.Fatalf("expected payment user id = %s", "user-123")
+	}
+
+	if payment.Currency != "USD" {
+		t.Fatalf("expected payment currency = %s", "USD")
+	}
+
+	if payment.Status != PaymentStatusCompleted {
+		t.Fatalf("expected status %q, got %q", PaymentStatusCompleted, payment.Status)
+	}
+}
