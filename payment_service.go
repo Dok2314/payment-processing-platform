@@ -10,6 +10,7 @@ import (
 var ErrPaymentNotFound = errors.New("payment not found")
 var ErrInvalidPayment = errors.New("invalid payment")
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
+var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
 
 type PaymentService struct {
 	store *PaymentStore
@@ -59,10 +60,11 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 		Currency: payment.Currency,
 	}
 
-	if !s.store.Update(updatedPayment) {
-		return Payment{}, ErrPaymentNotFound
+	if err := s.store.UpdatePending(updatedPayment); err != nil {
+		return Payment{}, err
 	}
 
+	updatedPayment.Status = PaymentStatusPending
 	return updatedPayment, nil
 }
 

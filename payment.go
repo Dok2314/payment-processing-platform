@@ -65,18 +65,6 @@ func (s *PaymentStore) Get(id string) (Payment, bool) {
 	return payment, ok
 }
 
-func (s *PaymentStore) Update(payment Payment) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, ok := s.payments[payment.ID]; !ok {
-		return false
-	}
-
-	s.payments[payment.ID] = payment
-	return true
-}
-
 func (s *PaymentStore) CancelPending(id string) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -123,6 +111,25 @@ func (s *PaymentStore) CreateIdempotent(
 		PayloadHash: payloadHash,
 	}
 	return payment, nil
+}
+
+func (s *PaymentStore) UpdatePending(payment Payment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.payments[payment.ID]
+	if !ok {
+		return ErrPaymentNotFound
+	}
+
+	if existing.Status != PaymentStatusPending {
+		return ErrPaymentCannotBeUpdated
+	}
+
+	payment.Status = existing.Status
+	s.payments[payment.ID] = payment
+
+	return nil
 }
 
 func payloadHash(payment PaymentRequest) (string, error) {
