@@ -97,13 +97,26 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(updatedPayment)
 }
 
-func deletePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+func cancelPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if !service.Delete(id) {
-		http.Error(w, "payment not found", http.StatusNotFound)
+	payment, err := service.Cancel(id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeCancelled) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("cancel payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
 }
