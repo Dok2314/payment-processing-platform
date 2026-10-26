@@ -248,6 +248,7 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 		UserID:   "user-123",
 		Amount:   100.50,
 		Currency: "USD",
+		Status:   PaymentStatusPending,
 	})
 
 	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
@@ -292,38 +293,12 @@ func TestUpdatePaymentNotFound(t *testing.T) {
 	}
 }
 
-func TestDeletePaymentSuccess(t *testing.T) {
-	store := NewPaymentStore()
-	service := NewPaymentService(store)
-	store.Save(Payment{
-		ID:       "payment-123",
-		UserID:   "user-123",
-		Amount:   100.50,
-		Currency: "USD",
-	})
-
-	r := newRouter(service)
-	req := httptest.NewRequest("DELETE", "/payments/payment-123", nil)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected status %d, got %d", http.StatusNoContent, w.Code)
-	}
-
-	_, ok := store.Get("payment-123")
-	if ok {
-		t.Fatal("expected payment to be deleted")
-	}
-}
-
-func TestDeletePaymentNotFound(t *testing.T) {
+func TestCancelPaymentNotFound(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 	r := newRouter(service)
 
-	req := httptest.NewRequest("DELETE", "/payments/nonexistent", nil)
+	req := httptest.NewRequest("POST", "/payments/nonexistent/cancel", nil)
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -440,7 +415,7 @@ func TestCreateIdempotent(t *testing.T) {
 		Currency: "USD",
 	}
 
-	fp, err := store.CreateIdempotent("order-123", first)
+	fp, err := store.CreateIdempotent("order-123", first, "test-hash")
 	if err != nil {
 		t.Fatalf("first CreateIdempotent() error: %v", err)
 	}
@@ -448,11 +423,11 @@ func TestCreateIdempotent(t *testing.T) {
 	second := Payment{
 		ID:       "payment-2",
 		UserID:   "123",
-		Amount:   200,
+		Amount:   100.50,
 		Currency: "USD",
 	}
 
-	sp, err := store.CreateIdempotent("order-123", second)
+	sp, err := store.CreateIdempotent("order-123", second, "test-hash")
 	if err != nil {
 		t.Fatalf("second CreateIdempotent() error: %v", err)
 	}
@@ -488,7 +463,7 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 				Currency: "USD",
 			}
 
-			p, err := store.CreateIdempotent("order-123", payment)
+			p, err := store.CreateIdempotent("order-123", payment, "test-hash")
 			if err != nil {
 				t.Errorf("CreateIdempotent: %v", err)
 				return
@@ -578,5 +553,51 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	_, err = service.Cancel(created.ID)
 	if !errors.Is(err, ErrPaymentCannotBeCancelled) {
 		t.Fatalf("expected ErrPaymentCannotBeCancelled, got %v", err)
+	}
+}
+
+func TestUpdatePaymentCompletedConflict(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	store.Save(Payment{
+		ID:       "payment-123",
+		UserID:   "user-123",
+		Amount:   100.50,
+		Currency: "USD",
+		Status:   PaymentStatusCompleted,
+	})
+
+	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
+	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r := newRouter(service)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+
+	payment, ok := store.Get("payment-123")
+	if !ok {
+		t.Fatal("expected completed payment to remain in store")
+	}
+
+	if payment.Amount != 100.50 {
+		t.Fatalf("expected payment amount = %.2f", 100.50)
+	}
+
+	if payment.UserID != "user-123" {
+		t.Fatalf("expected payment user id = %s", "user-123")
+	}
+
+	if payment.Currency != "USD" {
+		t.Fatalf("expected payment currency = %s", "USD")
+	}
+
+	if payment.Status != PaymentStatusCompleted {
+		t.Fatalf("expected status %q, got %q", PaymentStatusCompleted, payment.Status)
 	}
 }
