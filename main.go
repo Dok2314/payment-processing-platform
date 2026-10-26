@@ -63,6 +63,14 @@ func runServer(server *http.Server) error {
 }
 
 func main() {
+	ctx := context.Background()
+
+	pool, err := NewPostgresPool(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pool.Close()
+
 	store := NewPaymentStore()
 
 	service := NewPaymentService(store)
@@ -71,7 +79,7 @@ func main() {
 
 	server := newServer(mux)
 
-	err := runServer(server)
+	err = runServer(server)
 
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Server failed: %v", err)
