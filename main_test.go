@@ -116,7 +116,7 @@ func TestCreatePaymentMissingUserID(t *testing.T) {
 }
 
 func TestCreatePaymentMissingCurrency(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"123","amount":100.50,"currency":""}`)
+	body := strings.NewReader(`{"user_id":"123","amount":10050,"currency":""}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -132,7 +132,7 @@ func TestCreatePaymentMissingCurrency(t *testing.T) {
 }
 
 func TestCreatePaymentSuccess(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"123","amount":100.50,"currency":"USD"}`)
+	body := strings.NewReader(`{"user_id":"123","amount":10050,"currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "test-order-123")
@@ -161,8 +161,8 @@ func TestCreatePaymentSuccess(t *testing.T) {
 		t.Fatalf("expected user_id %q, got %q", "123", payment.UserID)
 	}
 
-	if payment.Amount != 100.50 {
-		t.Fatalf("expected amount %v, got %v", 100.50, payment.Amount)
+	if payment.Amount != 10050 {
+		t.Fatalf("expected amount %d, got %d", 10050, payment.Amount)
 	}
 
 	if payment.Currency != "USD" {
@@ -176,7 +176,7 @@ func TestPaymentStoreGet(t *testing.T) {
 	payment := Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 
@@ -214,7 +214,7 @@ func TestGetPaymentSuccess(t *testing.T) {
 	payment := Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 	store.Save(payment)
@@ -246,7 +246,7 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 	store.Save(Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 		Status:   PaymentStatusPending,
 	})
@@ -314,7 +314,7 @@ func TestUpdatePaymentInvalidAmount(t *testing.T) {
 	payment := Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 
@@ -340,8 +340,8 @@ func TestUpdatePaymentInvalidAmount(t *testing.T) {
 		t.Fatalf("expected payment to still exist")
 	}
 
-	if payment.Amount != 100.50 {
-		t.Fatalf("expected amount %.2f, got %.2f", 100.50, payment.Amount)
+	if payment.Amount != 10050 {
+		t.Fatalf("expected amount %d, got %d", 10050, payment.Amount)
 	}
 }
 
@@ -349,7 +349,7 @@ func TestUpdatePaymentInvalidJSON(t *testing.T) {
 	payment := Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 
@@ -376,8 +376,8 @@ func TestUpdatePaymentInvalidJSON(t *testing.T) {
 		t.Fatalf("expected payment to still exist")
 	}
 
-	if payment.Amount != 100.50 {
-		t.Fatalf("expected payment amount = %.2f", 100.50)
+	if payment.Amount != 10050 {
+		t.Fatalf("expected payment amount = %d", 10050)
 	}
 
 	if payment.UserID != "user-123" {
@@ -411,7 +411,7 @@ func TestCreateIdempotent(t *testing.T) {
 	first := Payment{
 		ID:       "payment-1",
 		UserID:   "123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 
@@ -423,7 +423,7 @@ func TestCreateIdempotent(t *testing.T) {
 	second := Payment{
 		ID:       "payment-2",
 		UserID:   "123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 	}
 
@@ -436,8 +436,8 @@ func TestCreateIdempotent(t *testing.T) {
 		t.Fatalf("payment IDs differ: first=%q, second=%q", fp.ID, sp.ID)
 	}
 
-	if sp.Amount != 100.50 {
-		t.Fatalf("unexpected amount: got=%v, want=100.50", sp.Amount)
+	if sp.Amount != 10050 {
+		t.Fatalf("unexpected amount: got=%v, want=10050", sp.Amount)
 	}
 
 	if sp.ID != "payment-1" {
@@ -459,7 +459,7 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 			payment := Payment{
 				ID:       fmt.Sprintf("payment-%d", i),
 				UserID:   "123",
-				Amount:   100.50,
+				Amount:   10050,
 				Currency: "USD",
 			}
 
@@ -563,7 +563,7 @@ func TestUpdatePaymentCompletedConflict(t *testing.T) {
 	store.Save(Payment{
 		ID:       "payment-123",
 		UserID:   "user-123",
-		Amount:   100.50,
+		Amount:   10050,
 		Currency: "USD",
 		Status:   PaymentStatusCompleted,
 	})
@@ -585,8 +585,8 @@ func TestUpdatePaymentCompletedConflict(t *testing.T) {
 		t.Fatal("expected completed payment to remain in store")
 	}
 
-	if payment.Amount != 100.50 {
-		t.Fatalf("expected payment amount = %.2f", 100.50)
+	if payment.Amount != 10050 {
+		t.Fatalf("expected payment amount = %d, got %d", 10050, payment.Amount)
 	}
 
 	if payment.UserID != "user-123" {
