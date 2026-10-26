@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -519,5 +520,63 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 		if id != firstID {
 			t.Fatalf("expected same payment ID, got %s and %s", firstID, id)
 		}
+	}
+}
+
+func TestCancelPaymentSuccess(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	created, err := service.Create("key-1", PaymentRequest{
+		UserID:   "user-1",
+		Amount:   100,
+		Currency: "USD",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cancelled, err := service.Cancel(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cancelled.Status != PaymentStatusCancelled {
+		t.Errorf("expected status %q, got %q",
+			PaymentStatusCancelled, cancelled.Status)
+	}
+
+	saved, ok := service.Get(created.ID)
+	if !ok {
+		t.Fatal("expected cancelled payment to remain in store")
+	}
+
+	if saved.Status != PaymentStatusCancelled {
+		t.Errorf("expected stored status %q, got %q",
+			PaymentStatusCancelled, saved.Status)
+	}
+}
+
+func TestCancelPaymentAlreadyCancelled(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	created, err := service.Create("key-1", PaymentRequest{
+		UserID:   "user-1",
+		Amount:   100,
+		Currency: "USD",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.Cancel(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.Cancel(created.ID)
+	if !errors.Is(err, ErrPaymentCannotBeCancelled) {
+		t.Fatalf("expected ErrPaymentCannotBeCancelled, got %v", err)
 	}
 }

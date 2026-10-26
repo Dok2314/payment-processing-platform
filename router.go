@@ -28,8 +28,8 @@ func newRouter(service *PaymentService) chi.Router {
 		updatePaymentHandler(service, w, r)
 	})
 
-	r.Delete("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		deletePaymentHandler(service, w, r)
+	r.Post("/payments/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
+		cancelPaymentHandler(service, w, r)
 	})
 
 	return r

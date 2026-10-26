@@ -9,6 +9,7 @@ import (
 
 var ErrPaymentNotFound = errors.New("payment not found")
 var ErrInvalidPayment = errors.New("invalid payment")
+var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 
 type PaymentService struct {
 	store *PaymentStore
@@ -25,15 +26,21 @@ func (s *PaymentService) Create(key string, payment PaymentRequest) (Payment, er
 		return Payment{}, err
 	}
 
+	hash, err := payloadHash(payment)
+	if err != nil {
+		return Payment{}, fmt.Errorf("encode payment request: %w", err)
+	}
+
 	createdPayment := Payment{
 		UserID:   payment.UserID,
 		Amount:   payment.Amount,
 		Currency: payment.Currency,
+		Status:   PaymentStatusPending,
 	}
 
 	createdPayment.ID = uuid.NewString()
 
-	return s.store.CreateIdempotent(key, createdPayment)
+	return s.store.CreateIdempotent(key, createdPayment, hash)
 }
 
 func (s *PaymentService) Get(id string) (Payment, bool) {
@@ -59,8 +66,8 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 	return updatedPayment, nil
 }
 
-func (s *PaymentService) Delete(id string) bool {
-	return s.store.Delete(id)
+func (s *PaymentService) Cancel(id string) (Payment, error) {
+	return s.store.CancelPending(id)
 }
 
 func validatePayment(payment PaymentRequest) error {

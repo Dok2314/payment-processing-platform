@@ -1,8 +1,21 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"sync"
+)
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPending    PaymentStatus = "PENDING"
+	PaymentStatusProcessing PaymentStatus = "PROCESSING"
+	PaymentStatusCompleted  PaymentStatus = "COMPLETED"
+	PaymentStatusFailed     PaymentStatus = "FAILED"
+	PaymentStatusCancelled  PaymentStatus = "CANCELLED"
 )
 
 type PaymentRequest struct {
@@ -12,22 +25,28 @@ type PaymentRequest struct {
 }
 
 type Payment struct {
-	ID       string  `json:"id"`
-	UserID   string  `json:"user_id"`
-	Amount   float64 `json:"amount"`
-	Currency string  `json:"currency"`
+	ID       string        `json:"id"`
+	UserID   string        `json:"user_id"`
+	Amount   float64       `json:"amount"`
+	Currency string        `json:"currency"`
+	Status   PaymentStatus `json:"status"`
 }
 
 type PaymentStore struct {
 	mu              sync.Mutex
-	payments        map[string]Payment // paymentID → Payment
-	idempotencyKeys map[string]string  // idempotencyKey → paymentID
+	payments        map[string]Payment           // paymentID → Payment
+	idempotencyKeys map[string]IdempotencyRecord // idempotencyKey → IdempotencyRecord
+}
+
+type IdempotencyRecord struct {
+	PaymentID   string
+	PayloadHash string
 }
 
 func NewPaymentStore() *PaymentStore {
 	return &PaymentStore{
 		payments:        make(map[string]Payment),
-		idempotencyKeys: make(map[string]string),
+		idempotencyKeys: make(map[string]IdempotencyRecord),
 	}
 }
 
@@ -58,25 +77,40 @@ func (s *PaymentStore) Update(payment Payment) bool {
 	return true
 }
 
-func (s *PaymentStore) Delete(id string) bool {
+func (s *PaymentStore) CancelPending(id string) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.payments[id]; !ok {
-		return false
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
 	}
 
-	delete(s.payments, id)
-	return true
+	if payment.Status != PaymentStatusPending {
+		return Payment{}, ErrPaymentCannotBeCancelled
+	}
+
+	payment.Status = PaymentStatusCancelled
+	s.payments[id] = payment
+
+	return payment, nil
 }
 
-func (s *PaymentStore) CreateIdempotent(key string, payment Payment) (Payment, error) {
+func (s *PaymentStore) CreateIdempotent(
+	key string,
+	payment Payment,
+	payloadHash string,
+) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	pid, ok := s.idempotencyKeys[key]
+	ir, ok := s.idempotencyKeys[key]
 	if ok {
-		p, exists := s.payments[pid]
+		if payloadHash != ir.PayloadHash {
+			return Payment{}, errors.New("idempotency key reused with different payload")
+		}
+
+		p, exists := s.payments[ir.PaymentID]
 		if !exists {
 			return Payment{}, errors.New("idempotency key references missing payment")
 		}
@@ -84,6 +118,19 @@ func (s *PaymentStore) CreateIdempotent(key string, payment Payment) (Payment, e
 	}
 
 	s.payments[payment.ID] = payment
-	s.idempotencyKeys[key] = payment.ID
+	s.idempotencyKeys[key] = IdempotencyRecord{
+		PaymentID:   payment.ID,
+		PayloadHash: payloadHash,
+	}
 	return payment, nil
+}
+
+func payloadHash(payment PaymentRequest) (string, error) {
+	data, err := json.Marshal(payment)
+	if err != nil {
+		return "", err
+	}
+
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
