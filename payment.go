@@ -19,15 +19,15 @@ const (
 )
 
 type PaymentRequest struct {
-	UserID   string  `json:"user_id"`
-	Amount   float64 `json:"amount"`
-	Currency string  `json:"currency"`
+	UserID   string `json:"user_id"`
+	Amount   int64  `json:"amount"`
+	Currency string `json:"currency"`
 }
 
 type Payment struct {
 	ID       string        `json:"id"`
 	UserID   string        `json:"user_id"`
-	Amount   float64       `json:"amount"`
+	Amount   int64         `json:"amount"`
 	Currency string        `json:"currency"`
 	Status   PaymentStatus `json:"status"`
 }
