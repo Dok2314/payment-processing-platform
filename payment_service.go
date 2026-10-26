@@ -12,11 +12,18 @@ var ErrInvalidPayment = errors.New("invalid payment")
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
 
-type PaymentService struct {
-	store *PaymentStore
+type PaymentRepository interface {
+	CreateIdempotent(key string, payment Payment, payloadHash string) (Payment, error)
+	Get(id string) (Payment, bool)
+	UpdatePending(payment Payment) error
+	CancelPending(id string) (Payment, error)
 }
 
-func NewPaymentService(store *PaymentStore) *PaymentService {
+type PaymentService struct {
+	store PaymentRepository
+}
+
+func NewPaymentService(store PaymentRepository) *PaymentService {
 	return &PaymentService{
 		store: store,
 	}
