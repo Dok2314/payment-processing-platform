@@ -35,7 +35,7 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 		return
 	}
 
-	createdPayment, err := service.Create(key, payment)
+	createdPayment, err := service.Create(r.Context(), key, payment)
 
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
@@ -56,9 +56,15 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 func getPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	payment, ok := service.Get(id)
-	if !ok {
-		http.Error(w, "payment not found", http.StatusNotFound)
+	payment, err := service.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, "payment not found", http.StatusNotFound)
+			return
+		}
+
+		log.Printf("get payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 

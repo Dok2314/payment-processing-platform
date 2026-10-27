@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -182,9 +183,9 @@ func TestPaymentStoreGet(t *testing.T) {
 
 	store.Save(payment)
 
-	got, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatal("expected payment to exist")
+	got, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to exist: %v", err)
 	}
 
 	if got != payment {
@@ -335,9 +336,9 @@ func TestUpdatePaymentInvalidAmount(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatalf("expected payment to still exist")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to still exist: %v", err)
 	}
 
 	if payment.Amount != 10050 {
@@ -371,9 +372,9 @@ func TestUpdatePaymentInvalidJSON(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatalf("expected payment to still exist")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to still exist: %v", err)
 	}
 
 	if payment.Amount != 10050 {
@@ -415,7 +416,7 @@ func TestCreateIdempotent(t *testing.T) {
 		Currency: "USD",
 	}
 
-	fp, err := store.CreateIdempotent("order-123", first, "test-hash")
+	fp, err := store.CreateIdempotent(context.Background(), "order-123", first, "test-hash")
 	if err != nil {
 		t.Fatalf("first CreateIdempotent() error: %v", err)
 	}
@@ -427,7 +428,7 @@ func TestCreateIdempotent(t *testing.T) {
 		Currency: "USD",
 	}
 
-	sp, err := store.CreateIdempotent("order-123", second, "test-hash")
+	sp, err := store.CreateIdempotent(context.Background(), "order-123", second, "test-hash")
 	if err != nil {
 		t.Fatalf("second CreateIdempotent() error: %v", err)
 	}
@@ -463,7 +464,7 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 				Currency: "USD",
 			}
 
-			p, err := store.CreateIdempotent("order-123", payment, "test-hash")
+			p, err := store.CreateIdempotent(context.Background(), "order-123", payment, "test-hash")
 			if err != nil {
 				t.Errorf("CreateIdempotent: %v", err)
 				return
@@ -502,7 +503,7 @@ func TestCancelPaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 
-	created, err := service.Create("key-1", PaymentRequest{
+	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",
@@ -521,9 +522,9 @@ func TestCancelPaymentSuccess(t *testing.T) {
 			PaymentStatusCancelled, cancelled.Status)
 	}
 
-	saved, ok := service.Get(created.ID)
-	if !ok {
-		t.Fatal("expected cancelled payment to remain in store")
+	saved, err := service.Get(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("expected cancelled payment to remain in store: %v", err)
 	}
 
 	if saved.Status != PaymentStatusCancelled {
@@ -536,7 +537,7 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 
-	created, err := service.Create("key-1", PaymentRequest{
+	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",
@@ -580,9 +581,9 @@ func TestUpdatePaymentCompletedConflict(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusConflict, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatal("expected completed payment to remain in store")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected completed payment to remain in store: %v", err)
 	}
 
 	if payment.Amount != 10050 {

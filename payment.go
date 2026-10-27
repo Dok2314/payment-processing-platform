@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -57,12 +58,16 @@ func (s *PaymentStore) Save(payment Payment) {
 	s.payments[payment.ID] = payment
 }
 
-func (s *PaymentStore) Get(id string) (Payment, bool) {
+func (s *PaymentStore) Get(ctx context.Context, id string) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	payment, ok := s.payments[id]
-	return payment, ok
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	return payment, nil
 }
 
 func (s *PaymentStore) CancelPending(id string) (Payment, error) {
@@ -85,6 +90,7 @@ func (s *PaymentStore) CancelPending(id string) (Payment, error) {
 }
 
 func (s *PaymentStore) CreateIdempotent(
+	ctx context.Context,
 	key string,
 	payment Payment,
 	payloadHash string,
