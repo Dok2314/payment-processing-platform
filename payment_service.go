@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -14,7 +15,7 @@ var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
 
 type PaymentRepository interface {
 	CreateIdempotent(key string, payment Payment, payloadHash string) (Payment, error)
-	Get(id string) (Payment, bool)
+	Get(ctx context.Context, id string) (Payment, error)
 	UpdatePending(payment Payment) error
 	CancelPending(id string) (Payment, error)
 }
@@ -51,8 +52,8 @@ func (s *PaymentService) Create(key string, payment PaymentRequest) (Payment, er
 	return s.store.CreateIdempotent(key, createdPayment, hash)
 }
 
-func (s *PaymentService) Get(id string) (Payment, bool) {
-	return s.store.Get(id)
+func (s *PaymentService) Get(ctx context.Context, id string) (Payment, error) {
+	return s.store.Get(ctx, id)
 }
 
 func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, error) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -182,9 +183,9 @@ func TestPaymentStoreGet(t *testing.T) {
 
 	store.Save(payment)
 
-	got, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatal("expected payment to exist")
+	got, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to exist: %v", err)
 	}
 
 	if got != payment {
@@ -335,9 +336,9 @@ func TestUpdatePaymentInvalidAmount(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatalf("expected payment to still exist")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to still exist: %v", err)
 	}
 
 	if payment.Amount != 10050 {
@@ -371,9 +372,9 @@ func TestUpdatePaymentInvalidJSON(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatalf("expected payment to still exist")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected payment to still exist: %v", err)
 	}
 
 	if payment.Amount != 10050 {
@@ -521,9 +522,9 @@ func TestCancelPaymentSuccess(t *testing.T) {
 			PaymentStatusCancelled, cancelled.Status)
 	}
 
-	saved, ok := service.Get(created.ID)
-	if !ok {
-		t.Fatal("expected cancelled payment to remain in store")
+	saved, err := service.Get(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("expected cancelled payment to remain in store: %v", err)
 	}
 
 	if saved.Status != PaymentStatusCancelled {
@@ -580,9 +581,9 @@ func TestUpdatePaymentCompletedConflict(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusConflict, w.Code)
 	}
 
-	payment, ok := store.Get("payment-123")
-	if !ok {
-		t.Fatal("expected completed payment to remain in store")
+	payment, err := store.Get(context.Background(), "payment-123")
+	if err != nil {
+		t.Fatalf("expected completed payment to remain in store: %v", err)
 	}
 
 	if payment.Amount != 10050 {
