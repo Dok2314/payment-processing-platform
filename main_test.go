@@ -416,7 +416,7 @@ func TestCreateIdempotent(t *testing.T) {
 		Currency: "USD",
 	}
 
-	fp, err := store.CreateIdempotent("order-123", first, "test-hash")
+	fp, err := store.CreateIdempotent(context.Background(), "order-123", first, "test-hash")
 	if err != nil {
 		t.Fatalf("first CreateIdempotent() error: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestCreateIdempotent(t *testing.T) {
 		Currency: "USD",
 	}
 
-	sp, err := store.CreateIdempotent("order-123", second, "test-hash")
+	sp, err := store.CreateIdempotent(context.Background(), "order-123", second, "test-hash")
 	if err != nil {
 		t.Fatalf("second CreateIdempotent() error: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 				Currency: "USD",
 			}
 
-			p, err := store.CreateIdempotent("order-123", payment, "test-hash")
+			p, err := store.CreateIdempotent(context.Background(), "order-123", payment, "test-hash")
 			if err != nil {
 				t.Errorf("CreateIdempotent: %v", err)
 				return
@@ -503,7 +503,7 @@ func TestCancelPaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 
-	created, err := service.Create("key-1", PaymentRequest{
+	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",
@@ -537,7 +537,7 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 
-	created, err := service.Create("key-1", PaymentRequest{
+	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",

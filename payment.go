@@ -90,6 +90,7 @@ func (s *PaymentStore) CancelPending(id string) (Payment, error) {
 }
 
 func (s *PaymentStore) CreateIdempotent(
+	ctx context.Context,
 	key string,
 	payment Payment,
 	payloadHash string,

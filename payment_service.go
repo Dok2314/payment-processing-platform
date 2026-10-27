@@ -14,7 +14,7 @@ var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
 
 type PaymentRepository interface {
-	CreateIdempotent(key string, payment Payment, payloadHash string) (Payment, error)
+	CreateIdempotent(ctx context.Context, key string, payment Payment, payloadHash string) (Payment, error)
 	Get(ctx context.Context, id string) (Payment, error)
 	UpdatePending(payment Payment) error
 	CancelPending(id string) (Payment, error)
@@ -30,7 +30,7 @@ func NewPaymentService(store PaymentRepository) *PaymentService {
 	}
 }
 
-func (s *PaymentService) Create(key string, payment PaymentRequest) (Payment, error) {
+func (s *PaymentService) Create(ctx context.Context, key string, payment PaymentRequest) (Payment, error) {
 	if err := validatePayment(payment); err != nil {
 		return Payment{}, err
 	}
@@ -49,7 +49,7 @@ func (s *PaymentService) Create(key string, payment PaymentRequest) (Payment, er
 
 	createdPayment.ID = uuid.NewString()
 
-	return s.store.CreateIdempotent(key, createdPayment, hash)
+	return s.store.CreateIdempotent(ctx, key, createdPayment, hash)
 }
 
 func (s *PaymentService) Get(ctx context.Context, id string) (Payment, error) {

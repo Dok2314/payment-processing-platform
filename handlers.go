@@ -35,7 +35,7 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 		return
 	}
 
-	createdPayment, err := service.Create(key, payment)
+	createdPayment, err := service.Create(r.Context(), key, payment)
 
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
