@@ -71,7 +71,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	store := NewPaymentStore()
+	store := NewPostgresPaymentStore(pool)
 
 	service := NewPaymentService(store)
 

@@ -502,8 +502,9 @@ func TestCreateIdempotentConcurrent(t *testing.T) {
 func TestCancelPaymentSuccess(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
+	ctx := context.Background()
 
-	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
+	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",
@@ -512,7 +513,7 @@ func TestCancelPaymentSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cancelled, err := service.Cancel(created.ID)
+	cancelled, err := service.Cancel(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,10 +535,11 @@ func TestCancelPaymentSuccess(t *testing.T) {
 }
 
 func TestCancelPaymentAlreadyCancelled(t *testing.T) {
+	ctx := context.Background()
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
 
-	created, err := service.Create(context.Background(), "key-1", PaymentRequest{
+	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
 		Amount:   100,
 		Currency: "USD",
@@ -546,12 +548,12 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = service.Cancel(created.ID)
+	_, err = service.Cancel(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = service.Cancel(created.ID)
+	_, err = service.Cancel(ctx, created.ID)
 	if !errors.Is(err, ErrPaymentCannotBeCancelled) {
 		t.Fatalf("expected ErrPaymentCannotBeCancelled, got %v", err)
 	}

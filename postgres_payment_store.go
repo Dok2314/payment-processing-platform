@@ -109,3 +109,57 @@ func (ps *PostgresPaymentStore) CreateIdempotent(
 
 	return payment, nil
 }
+
+func (ps *PostgresPaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
+	tag, err := ps.pool.Exec(ctx, `
+		UPDATE payments
+		SET user_id = $1,
+		    amount = $2,
+		    currency = $3,
+		    updated_at = NOW()
+		WHERE id = $4 AND status = $5
+	`,
+		payment.UserID,
+		payment.Amount,
+		payment.Currency,
+		payment.ID,
+		PaymentStatusPending,
+	)
+	if err != nil {
+		return fmt.Errorf("update payment: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		_, err := ps.Get(ctx, payment.ID)
+		if err != nil {
+			return err
+		}
+
+		return ErrPaymentCannotBeUpdated
+	}
+
+	return nil
+}
+
+func (ps *PostgresPaymentStore) CancelPending(ctx context.Context, id string) (Payment, error) {
+	tag, err := ps.pool.Exec(ctx, `
+		UPDATE payments
+		SET status = $1,
+		    updated_at = NOW()
+		WHERE id = $2 AND status = $3
+	`, PaymentStatusCancelled, id, PaymentStatusPending)
+	if err != nil {
+		return Payment{}, fmt.Errorf("cancel payment: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		_, err := ps.Get(ctx, id)
+		if err != nil {
+			return Payment{}, err
+		}
+
+		return Payment{}, ErrPaymentCannotBeCancelled
+	}
+
+	return ps.Get(ctx, id)
+}

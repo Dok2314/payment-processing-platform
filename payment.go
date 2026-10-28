@@ -70,7 +70,7 @@ func (s *PaymentStore) Get(ctx context.Context, id string) (Payment, error) {
 	return payment, nil
 }
 
-func (s *PaymentStore) CancelPending(id string) (Payment, error) {
+func (s *PaymentStore) CancelPending(ctx context.Context, id string) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -119,7 +119,7 @@ func (s *PaymentStore) CreateIdempotent(
 	return payment, nil
 }
 
-func (s *PaymentStore) UpdatePending(payment Payment) error {
+func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

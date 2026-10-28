@@ -16,8 +16,8 @@ var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
 type PaymentRepository interface {
 	CreateIdempotent(ctx context.Context, key string, payment Payment, payloadHash string) (Payment, error)
 	Get(ctx context.Context, id string) (Payment, error)
-	UpdatePending(payment Payment) error
-	CancelPending(id string) (Payment, error)
+	UpdatePending(ctx context.Context, payment Payment) error
+	CancelPending(ctx context.Context, id string) (Payment, error)
 }
 
 type PaymentService struct {
@@ -56,7 +56,7 @@ func (s *PaymentService) Get(ctx context.Context, id string) (Payment, error) {
 	return s.store.Get(ctx, id)
 }
 
-func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, error) {
+func (s *PaymentService) Update(ctx context.Context, id string, payment PaymentRequest) (Payment, error) {
 	if err := validatePayment(payment); err != nil {
 		return Payment{}, err
 	}
@@ -68,7 +68,7 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 		Currency: payment.Currency,
 	}
 
-	if err := s.store.UpdatePending(updatedPayment); err != nil {
+	if err := s.store.UpdatePending(ctx, updatedPayment); err != nil {
 		return Payment{}, err
 	}
 
@@ -76,8 +76,8 @@ func (s *PaymentService) Update(id string, payment PaymentRequest) (Payment, err
 	return updatedPayment, nil
 }
 
-func (s *PaymentService) Cancel(id string) (Payment, error) {
-	return s.store.CancelPending(id)
+func (s *PaymentService) Cancel(ctx context.Context, id string) (Payment, error) {
+	return s.store.CancelPending(ctx, id)
 }
 
 func validatePayment(payment PaymentRequest) error {
