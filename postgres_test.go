@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -60,7 +62,7 @@ func TestPostgresCreateAndGet(t *testing.T) {
 
 	ctx := context.Background()
 
-	key := "order-123"
+	key := fmt.Sprintf("order-%d", time.Now().UnixNano())
 
 	req := PaymentRequest{
 		UserID:   "user-123",
@@ -69,7 +71,7 @@ func TestPostgresCreateAndGet(t *testing.T) {
 	}
 
 	payment := Payment{
-		ID:       "payment-123",
+		ID:       fmt.Sprintf("payment-%d", time.Now().UnixNano()),
 		UserID:   "user-123",
 		Amount:   10050,
 		Currency: "USD",
@@ -91,8 +93,8 @@ func TestPostgresCreateAndGet(t *testing.T) {
 		t.Fatalf("get payment: %v", err)
 	}
 
-	if got.ID != "payment-123" {
-		t.Fatalf("ID: got %q, want %q", got.ID, "payment-123")
+	if got.ID != payment.ID {
+		t.Fatalf("ID: got %q, want %q", got.ID, payment.ID)
 	}
 
 	if got.UserID != "user-123" {
@@ -179,7 +181,7 @@ func TestPostgresCreateIdempotent(t *testing.T) {
 func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 	store := newTestPostgresStore(t)
 	ctx := context.Background()
-	key := "test-key-123"
+	key := fmt.Sprintf("test-key-%d", time.Now().UnixNano())
 
 	req := PaymentRequest{
 		UserID:   "user-123",
@@ -188,7 +190,7 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 	}
 
 	payment := Payment{
-		ID:       "payment-123",
+		ID:       fmt.Sprintf("payment-%d", time.Now().UnixNano()),
 		UserID:   req.UserID,
 		Amount:   req.Amount,
 		Currency: req.Currency,
@@ -244,6 +246,136 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 		FROM payments
 		WHERE id = $1
 	`, payment.ID).Scan(&count)
+
+	if err != nil {
+		t.Fatalf("count payments: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("payment count: got %d, want 1", count)
+	}
+}
+
+func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
+	key := "key-test-123"
+
+	req1 := PaymentRequest{
+		UserID:   "user-123",
+		Amount:   10050,
+		Currency: "USD",
+	}
+
+	req2 := PaymentRequest{
+		UserID:   "user-456",
+		Amount:   20050,
+		Currency: "EUR",
+	}
+
+	req3 := PaymentRequest{
+		UserID:   "user-789",
+		Amount:   30050,
+		Currency: "USD",
+	}
+
+	req4 := PaymentRequest{
+		UserID:   "user-987",
+		Amount:   40050,
+		Currency: "EUR",
+	}
+
+	req5 := PaymentRequest{
+		UserID:   "user-10123",
+		Amount:   50050,
+		Currency: "USD",
+	}
+
+	hash1, err := payloadHash(req1)
+	if err != nil {
+		t.Fatalf("hash req1: %v", err)
+	}
+
+	hash2, err := payloadHash(req2)
+	if err != nil {
+		t.Fatalf("hash req2: %v", err)
+	}
+
+	hash3, err := payloadHash(req3)
+	if err != nil {
+		t.Fatalf("hash req3: %v", err)
+	}
+
+	hash4, err := payloadHash(req4)
+	if err != nil {
+		t.Fatalf("hash req4: %v", err)
+	}
+
+	hash5, err := payloadHash(req5)
+	if err != nil {
+		t.Fatalf("hash req5: %v", err)
+	}
+
+	store := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	payments := []Payment{
+		{ID: "payment-diff-1", UserID: req1.UserID, Amount: req1.Amount, Currency: req1.Currency, Status: PaymentStatusPending},
+		{ID: "payment-diff-2", UserID: req2.UserID, Amount: req2.Amount, Currency: req2.Currency, Status: PaymentStatusPending},
+		{ID: "payment-diff-3", UserID: req3.UserID, Amount: req3.Amount, Currency: req3.Currency, Status: PaymentStatusPending},
+		{ID: "payment-diff-4", UserID: req4.UserID, Amount: req4.Amount, Currency: req4.Currency, Status: PaymentStatusPending},
+		{ID: "payment-diff-5", UserID: req5.UserID, Amount: req5.Amount, Currency: req5.Currency, Status: PaymentStatusPending},
+	}
+
+	hashes := []string{hash1, hash2, hash3, hash4, hash5}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(payments))
+
+	wg.Add(len(payments))
+
+	for i := range payments {
+		go func(i int) {
+			defer wg.Done()
+
+			_, err := store.CreateIdempotent(ctx, key, payments[i], hashes[i])
+			errs <- err
+		}(i)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	successes := 0
+	failures := 0
+
+	for err := range errs {
+		if err != nil {
+			failures++
+		} else {
+			successes++
+		}
+	}
+
+	if successes != 1 {
+		t.Fatalf("successes: got %d, want 1", successes)
+	}
+
+	if failures != 4 {
+		t.Fatalf("failures: got %d, want 4", failures)
+	}
+
+	var count int
+
+	err = store.pool.QueryRow(ctx, `
+    SELECT COUNT(*)
+    FROM payments
+    WHERE id IN (
+        'payment-diff-1',
+        'payment-diff-2',
+        'payment-diff-3',
+        'payment-diff-4',
+        'payment-diff-5'
+    )
+`).Scan(&count)
 
 	if err != nil {
 		t.Fatalf("count payments: %v", err)
