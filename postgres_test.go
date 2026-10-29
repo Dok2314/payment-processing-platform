@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 func newTestPostgresStore(t *testing.T) *PostgresPaymentStore {
 	t.Helper()
+
+	if err := godotenv.Load(); err != nil {
+		t.Fatalf("load .env: %v", err)
+	}
 
 	ctx := context.Background()
 
@@ -146,5 +152,104 @@ func TestPostgresCreateIdempotent(t *testing.T) {
 
 	if first.ID != second.ID {
 		t.Fatalf("ID mismatch: first got %q, second got %q", first.ID, second.ID)
+	}
+
+	var count int
+
+	err = store.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM payments
+		WHERE id = $1
+	`, first.ID).Scan(&count)
+
+	if err != nil {
+		t.Fatalf("count payments: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("payment count: got %d, want 1", count)
+	}
+
+	_, err = store.CreateIdempotent(ctx, key, payment2, "different-hash")
+	if err == nil {
+		t.Fatal("expected error for reused idempotency key with different payload")
+	}
+}
+
+func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
+	store := newTestPostgresStore(t)
+	ctx := context.Background()
+	key := "test-key-123"
+
+	req := PaymentRequest{
+		UserID:   "user-123",
+		Amount:   10050,
+		Currency: "USD",
+	}
+
+	payment := Payment{
+		ID:       "payment-123",
+		UserID:   req.UserID,
+		Amount:   req.Amount,
+		Currency: req.Currency,
+		Status:   PaymentStatusPending,
+	}
+
+	hash, err := payloadHash(req)
+	if err != nil {
+		t.Fatalf("error hashing: %v", err)
+	}
+
+	const workers = 5
+
+	var wg sync.WaitGroup
+	results := make(chan Payment, workers)
+	errs := make(chan error, workers)
+
+	wg.Add(workers)
+
+	for range workers {
+		go func() {
+			defer wg.Done()
+
+			p, err := store.CreateIdempotent(ctx, key, payment, hash)
+			if err != nil {
+				errs <- err
+				return
+			}
+
+			results <- p
+		}()
+	}
+
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("create idempotent: %v", err)
+	}
+
+	for range workers {
+		got := <-results
+
+		if got.ID != payment.ID {
+			t.Fatalf("ID: got %q, want %q", got.ID, payment.ID)
+		}
+	}
+
+	var count int
+	err = store.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM payments
+		WHERE id = $1
+	`, payment.ID).Scan(&count)
+
+	if err != nil {
+		t.Fatalf("count payments: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("payment count: got %d, want 1", count)
 	}
 }

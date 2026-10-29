@@ -10,6 +10,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func newServer(handler http.Handler) *http.Server {
@@ -64,6 +66,10 @@ func runServer(server *http.Server) error {
 
 func main() {
 	ctx := context.Background()
+
+	if err := godotenv.Load(); err != nil {
+		log.Println(".env file not found, using environment variables")
+	}
 
 	pool, err := NewPostgresPool(ctx)
 	if err != nil {
