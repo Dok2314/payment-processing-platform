@@ -81,7 +81,7 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 		return
 	}
 
-	updatedPayment, err := service.Update(id, payment)
+	updatedPayment, err := service.Update(r.Context(), id, payment)
 
 	if err != nil {
 		if errors.Is(err, ErrPaymentNotFound) {
@@ -111,7 +111,7 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 func cancelPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	payment, err := service.Cancel(id)
+	payment, err := service.Cancel(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrPaymentNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
