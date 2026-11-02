@@ -23,7 +23,7 @@ func (ps *PostgresPaymentStore) Get(ctx context.Context, id string) (Payment, er
 	var payment Payment
 
 	err := ps.pool.QueryRow(ctx, `
-		SELECT id, user_id, amount, currency, status 
+		SELECT id, user_id, amount, currency, status
 		FROM payments
 		WHERE id = $1
 	`, id).Scan(
@@ -31,7 +31,8 @@ func (ps *PostgresPaymentStore) Get(ctx context.Context, id string) (Payment, er
 		&payment.UserID,
 		&payment.Amount,
 		&payment.Currency,
-		&payment.Status)
+		&payment.Status,
+	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -113,37 +114,6 @@ func (ps *PostgresPaymentStore) CreateIdempotent(
 	}
 
 	return payment, nil
-}
-
-func (ps *PostgresPaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
-	tag, err := ps.pool.Exec(ctx, `
-		UPDATE payments
-		SET user_id = $1,
-		    amount = $2,
-		    currency = $3,
-		    updated_at = NOW()
-		WHERE id = $4 AND status = $5
-	`,
-		payment.UserID,
-		payment.Amount,
-		payment.Currency,
-		payment.ID,
-		PaymentStatusPending,
-	)
-	if err != nil {
-		return fmt.Errorf("update payment: %w", err)
-	}
-
-	if tag.RowsAffected() == 0 {
-		_, err := ps.Get(ctx, payment.ID)
-		if err != nil {
-			return err
-		}
-
-		return ErrPaymentCannotBeUpdated
-	}
-
-	return nil
 }
 
 func (ps *PostgresPaymentStore) CancelPending(ctx context.Context, id string) (Payment, error) {

@@ -29,14 +29,12 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	var payment PaymentRequest
 
 	err := json.NewDecoder(r.Body).Decode(&payment)
-
 	if err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	createdPayment, err := service.Create(r.Context(), key, payment)
-
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -70,42 +68,6 @@ func getPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payment)
-}
-
-func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	var payment PaymentRequest
-	if err := json.NewDecoder(r.Body).Decode(&payment); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	updatedPayment, err := service.Update(r.Context(), id, payment)
-
-	if err != nil {
-		if errors.Is(err, ErrPaymentNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-
-		if errors.Is(err, ErrInvalidPayment) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		if errors.Is(err, ErrPaymentCannotBeUpdated) {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-
-		log.Printf("update payment error: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedPayment)
 }
 
 func cancelPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {

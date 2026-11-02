@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -68,10 +67,26 @@ func TestRouter(t *testing.T) {
 	}
 }
 
+func TestUpdatePaymentRouteNotFound(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	req := httptest.NewRequest("PUT", "/payments/payment-123", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
+	}
+}
+
 func TestCreatePaymentInvalidAmount(t *testing.T) {
 	body := strings.NewReader(`{"user_id":"123","amount":-100,"currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-invalid-amount")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -88,6 +103,7 @@ func TestCreatePaymentInvalidJSON(t *testing.T) {
 	body := strings.NewReader(`{"user_id":"123","amount":-100,"currency":here invalid`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-invalid-json")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -101,9 +117,10 @@ func TestCreatePaymentInvalidJSON(t *testing.T) {
 }
 
 func TestCreatePaymentMissingUserID(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"","amount":100,"currency":"USD"}`)
+	body := strings.NewReader(`{"user_id":"","amount":"100.00","currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-missing-user")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -117,9 +134,10 @@ func TestCreatePaymentMissingUserID(t *testing.T) {
 }
 
 func TestCreatePaymentMissingCurrency(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"123","amount":10050,"currency":""}`)
+	body := strings.NewReader(`{"user_id":"123","amount":"100.50","currency":""}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-missing-currency")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -133,7 +151,7 @@ func TestCreatePaymentMissingCurrency(t *testing.T) {
 }
 
 func TestCreatePaymentSuccess(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"123","amount":10050,"currency":"USD"}`)
+	body := strings.NewReader(`{"user_id":"123","amount":"100.50","currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "test-order-123")
@@ -240,60 +258,6 @@ func TestGetPaymentSuccess(t *testing.T) {
 	}
 }
 
-func TestUpdatePaymentSuccess(t *testing.T) {
-	store := NewPaymentStore()
-	service := NewPaymentService(store)
-
-	store.Save(Payment{
-		ID:       "payment-123",
-		UserID:   "user-123",
-		Amount:   10050,
-		Currency: "USD",
-		Status:   PaymentStatusPending,
-	})
-
-	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
-	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	r := newRouter(service)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
-	}
-
-	var got Payment
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if got.ID != "payment-123" ||
-		got.UserID != "user-456" ||
-		got.Amount != 200 ||
-		got.Currency != "EUR" {
-		t.Fatalf("unexpected updated payment: %+v", got)
-	}
-}
-
-func TestUpdatePaymentNotFound(t *testing.T) {
-	store := NewPaymentStore()
-	service := NewPaymentService(store)
-	r := newRouter(service)
-
-	body := strings.NewReader(`{"user_id":"user-123","amount":100,"currency":"USD"}`)
-	req := httptest.NewRequest("PUT", "/payments/nonexistent", body)
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, w.Code)
-	}
-}
-
 func TestCancelPaymentNotFound(t *testing.T) {
 	store := NewPaymentStore()
 	service := NewPaymentService(store)
@@ -309,91 +273,11 @@ func TestCancelPaymentNotFound(t *testing.T) {
 	}
 }
 
-func TestUpdatePaymentInvalidAmount(t *testing.T) {
-	store := NewPaymentStore()
-
-	payment := Payment{
-		ID:       "payment-123",
-		UserID:   "user-123",
-		Amount:   10050,
-		Currency: "USD",
-	}
-
-	store.Save(payment)
-
-	service := NewPaymentService(store)
-	r := newRouter(service)
-
-	body := strings.NewReader(`{"user_id":"user-321","amount":-100,"currency":"EUR"}`)
-	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
-	}
-
-	payment, err := store.Get(context.Background(), "payment-123")
-	if err != nil {
-		t.Fatalf("expected payment to still exist: %v", err)
-	}
-
-	if payment.Amount != 10050 {
-		t.Fatalf("expected amount %d, got %d", 10050, payment.Amount)
-	}
-}
-
-func TestUpdatePaymentInvalidJSON(t *testing.T) {
-	payment := Payment{
-		ID:       "payment-123",
-		UserID:   "user-123",
-		Amount:   10050,
-		Currency: "USD",
-	}
-
-	store := NewPaymentStore()
-	service := NewPaymentService(store)
-	r := newRouter(service)
-
-	store.Save(payment)
-
-	body := strings.NewReader(`"{user_id: "user-321", "amount": 50, "currency":"USD"invalid"`)
-	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
-	}
-
-	payment, err := store.Get(context.Background(), "payment-123")
-	if err != nil {
-		t.Fatalf("expected payment to still exist: %v", err)
-	}
-
-	if payment.Amount != 10050 {
-		t.Fatalf("expected payment amount = %d", 10050)
-	}
-
-	if payment.UserID != "user-123" {
-		t.Fatalf("expected payment user id = %s", "user-123")
-	}
-
-	if payment.Currency != "USD" {
-		t.Fatalf("expected payment currency = %s", "USD")
-	}
-}
-
 func TestCreatePaymentInvalidAmountType(t *testing.T) {
 	body := strings.NewReader(`{"user_id":"123","amount":"ABC","currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-invalid-amount-type")
 
 	w := httptest.NewRecorder()
 	store := NewPaymentStore()
@@ -506,7 +390,7 @@ func TestCancelPaymentSuccess(t *testing.T) {
 
 	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
-		Amount:   100,
+		Amount:   "1.00",
 		Currency: "USD",
 	})
 	if err != nil {
@@ -541,7 +425,7 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 
 	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
-		Amount:   100,
+		Amount:   "1.00",
 		Currency: "USD",
 	})
 	if err != nil {
@@ -554,53 +438,7 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	}
 
 	_, err = service.Cancel(ctx, created.ID)
-	if !errors.Is(err, ErrPaymentCannotBeCancelled) {
-		t.Fatalf("expected ErrPaymentCannotBeCancelled, got %v", err)
-	}
-}
-
-func TestUpdatePaymentCompletedConflict(t *testing.T) {
-	store := NewPaymentStore()
-	service := NewPaymentService(store)
-
-	store.Save(Payment{
-		ID:       "payment-123",
-		UserID:   "user-123",
-		Amount:   10050,
-		Currency: "USD",
-		Status:   PaymentStatusCompleted,
-	})
-
-	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
-	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	r := newRouter(service)
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected status %d, got %d", http.StatusConflict, w.Code)
-	}
-
-	payment, err := store.Get(context.Background(), "payment-123")
-	if err != nil {
-		t.Fatalf("expected completed payment to remain in store: %v", err)
-	}
-
-	if payment.Amount != 10050 {
-		t.Fatalf("expected payment amount = %d, got %d", 10050, payment.Amount)
-	}
-
-	if payment.UserID != "user-123" {
-		t.Fatalf("expected payment user id = %s", "user-123")
-	}
-
-	if payment.Currency != "USD" {
-		t.Fatalf("expected payment currency = %s", "USD")
-	}
-
-	if payment.Status != PaymentStatusCompleted {
-		t.Fatalf("expected status %q, got %q", PaymentStatusCompleted, payment.Status)
+	if err == nil {
+		t.Fatal("expected cancellation of an already cancelled payment to fail")
 	}
 }

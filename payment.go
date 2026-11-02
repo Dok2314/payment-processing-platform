@@ -21,7 +21,7 @@ const (
 
 type PaymentRequest struct {
 	UserID   string `json:"user_id"`
-	Amount   int64  `json:"amount"`
+	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
@@ -35,8 +35,8 @@ type Payment struct {
 
 type PaymentStore struct {
 	mu              sync.Mutex
-	payments        map[string]Payment           // paymentID → Payment
-	idempotencyKeys map[string]IdempotencyRecord // idempotencyKey → IdempotencyRecord
+	payments        map[string]Payment
+	idempotencyKeys map[string]IdempotencyRecord
 }
 
 type IdempotencyRecord struct {
@@ -117,25 +117,6 @@ func (s *PaymentStore) CreateIdempotent(
 		PayloadHash: payloadHash,
 	}
 	return payment, nil
-}
-
-func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	existing, ok := s.payments[payment.ID]
-	if !ok {
-		return ErrPaymentNotFound
-	}
-
-	if existing.Status != PaymentStatusPending {
-		return ErrPaymentCannotBeUpdated
-	}
-
-	payment.Status = existing.Status
-	s.payments[payment.ID] = payment
-
-	return nil
 }
 
 func payloadHash(payment PaymentRequest) (string, error) {
