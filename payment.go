@@ -128,12 +128,12 @@ func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) (Paym
 		return Payment{}, ErrPaymentNotFound
 	}
 
-	if existing.Amount != payment.Amount {
-		return Payment{}, ErrPaymentAmountImmutable
-	}
-
 	if existing.Status != PaymentStatusPending {
 		return Payment{}, ErrPaymentCannotBeUpdated
+	}
+
+	if existing.Amount != payment.Amount {
+		return Payment{}, ErrPaymentAmountImmutable
 	}
 
 	payment.Status = existing.Status
