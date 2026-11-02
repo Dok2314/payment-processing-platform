@@ -119,23 +119,26 @@ func (s *PaymentStore) CreateIdempotent(
 	return payment, nil
 }
 
-func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
+func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) (Payment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	existing, ok := s.payments[payment.ID]
 	if !ok {
-		return ErrPaymentNotFound
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if existing.Amount != payment.Amount {
+		return Payment{}, ErrPaymentAmountImmutable
 	}
 
 	if existing.Status != PaymentStatusPending {
-		return ErrPaymentCannotBeUpdated
+		return Payment{}, ErrPaymentCannotBeUpdated
 	}
 
 	payment.Status = existing.Status
 	s.payments[payment.ID] = payment
-
-	return nil
+	return payment, nil
 }
 
 func payloadHash(payment PaymentRequest) (string, error) {

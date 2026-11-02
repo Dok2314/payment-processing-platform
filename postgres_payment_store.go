@@ -115,35 +115,77 @@ func (ps *PostgresPaymentStore) CreateIdempotent(
 	return payment, nil
 }
 
-func (ps *PostgresPaymentStore) UpdatePending(ctx context.Context, payment Payment) error {
-	tag, err := ps.pool.Exec(ctx, `
-		UPDATE payments
-		SET user_id = $1,
-		    amount = $2,
-		    currency = $3,
-		    updated_at = NOW()
-		WHERE id = $4 AND status = $5
-	`,
-		payment.UserID,
-		payment.Amount,
-		payment.Currency,
-		payment.ID,
-		PaymentStatusPending,
-	)
+func (ps *PostgresPaymentStore) UpdatePending(
+	ctx context.Context,
+	payment Payment,
+) (Payment, error) {
+	tx, err := ps.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return fmt.Errorf("update payment: %w", err)
+		return Payment{}, fmt.Errorf("begin update payment transaction: %w", err)
 	}
+	defer tx.Rollback(ctx)
 
-	if tag.RowsAffected() == 0 {
-		_, err := ps.Get(ctx, payment.ID)
-		if err != nil {
-			return err
+	var existing Payment
+
+	err = tx.QueryRow(ctx, `
+		SELECT id, user_id, amount, currency, status
+		FROM payments
+		WHERE id = $1
+		FOR UPDATE
+	`, payment.ID).Scan(
+		&existing.ID,
+		&existing.UserID,
+		&existing.Amount,
+		&existing.Currency,
+		&existing.Status,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Payment{}, ErrPaymentNotFound
 		}
 
-		return ErrPaymentCannotBeUpdated
+		return Payment{}, fmt.Errorf("lock payment for update: %w", err)
 	}
 
-	return nil
+	if existing.Status != PaymentStatusPending {
+		return Payment{}, ErrPaymentCannotBeUpdated
+	}
+
+	if existing.Amount != payment.Amount {
+		return Payment{}, ErrPaymentAmountImmutable
+	}
+
+	var updated Payment
+
+	err = tx.QueryRow(ctx, `
+		UPDATE payments
+		SET user_id = $1,
+		    currency = $2,
+		    updated_at = NOW()
+		WHERE id = $3
+		RETURNING id, user_id, amount, currency, status
+	`,
+		payment.UserID,
+		payment.Currency,
+		payment.ID,
+	).Scan(
+		&updated.ID,
+		&updated.UserID,
+		&updated.Amount,
+		&updated.Currency,
+		&updated.Status,
+	)
+
+	if err != nil {
+		return Payment{}, fmt.Errorf("update payment: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Payment{}, fmt.Errorf("commit update payment transaction: %w", err)
+	}
+
+	return updated, nil
 }
 
 func (ps *PostgresPaymentStore) CancelPending(ctx context.Context, id string) (Payment, error) {

@@ -252,7 +252,7 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 		Status:   PaymentStatusPending,
 	})
 
-	body := strings.NewReader(`{"user_id":"user-456","amount":"2.00","currency":"EUR"}`)
+	body := strings.NewReader(`{"user_id":"user-456","amount":"100.50","currency":"USD"}`)
 	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -271,8 +271,8 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 
 	if got.ID != "payment-123" ||
 		got.UserID != "user-456" ||
-		got.Amount != 200 ||
-		got.Currency != "EUR" {
+		got.Amount != 10050 ||
+		got.Currency != "USD" {
 		t.Fatalf("unexpected updated payment: %+v", got)
 	}
 }

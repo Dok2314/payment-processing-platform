@@ -99,6 +99,11 @@ func updatePaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 			return
 		}
 
+		if errors.Is(err, ErrPaymentAmountImmutable) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
 		log.Printf("update payment error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return

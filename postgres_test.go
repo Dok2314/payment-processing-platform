@@ -49,7 +49,7 @@ func TestPostgresGetNotFound(t *testing.T) {
 	store := newTestPostgresStore(t)
 
 	ctx := context.Background()
-	id := "missing-payment"
+	id := fmt.Sprintf("missing-payment-%d", time.Now().UnixNano())
 
 	_, err := store.Get(ctx, id)
 	if !errors.Is(err, ErrPaymentNotFound) {

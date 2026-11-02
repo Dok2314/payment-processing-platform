@@ -12,11 +12,12 @@ var ErrPaymentNotFound = errors.New("payment not found")
 var ErrInvalidPayment = errors.New("invalid payment")
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeUpdated = errors.New("payment cannot be updated")
+var ErrPaymentAmountImmutable = errors.New("payment amount is immutable")
 
 type PaymentRepository interface {
 	CreateIdempotent(ctx context.Context, key string, payment Payment, payloadHash string) (Payment, error)
 	Get(ctx context.Context, id string) (Payment, error)
-	UpdatePending(ctx context.Context, payment Payment) error
+	UpdatePending(ctx context.Context, payment Payment) (Payment, error)
 	CancelPending(ctx context.Context, id string) (Payment, error)
 }
 
@@ -78,11 +79,11 @@ func (s *PaymentService) Update(ctx context.Context, id string, payment PaymentR
 		Currency: payment.Currency,
 	}
 
-	if err := s.store.UpdatePending(ctx, updatedPayment); err != nil {
+	updatedPayment, err = s.store.UpdatePending(ctx, updatedPayment)
+	if err != nil {
 		return Payment{}, err
 	}
 
-	updatedPayment.Status = PaymentStatusPending
 	return updatedPayment, nil
 }
 
