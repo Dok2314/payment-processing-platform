@@ -35,8 +35,8 @@ type Payment struct {
 
 type PaymentStore struct {
 	mu              sync.Mutex
-	payments        map[string]Payment           // paymentID → Payment
-	idempotencyKeys map[string]IdempotencyRecord // idempotencyKey → IdempotencyRecord
+	payments        map[string]Payment
+	idempotencyKeys map[string]IdempotencyRecord
 }
 
 type IdempotencyRecord struct {
@@ -116,28 +116,6 @@ func (s *PaymentStore) CreateIdempotent(
 		PaymentID:   payment.ID,
 		PayloadHash: payloadHash,
 	}
-	return payment, nil
-}
-
-func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) (Payment, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	existing, ok := s.payments[payment.ID]
-	if !ok {
-		return Payment{}, ErrPaymentNotFound
-	}
-
-	if existing.Status != PaymentStatusPending {
-		return Payment{}, ErrPaymentCannotBeUpdated
-	}
-
-	if existing.Amount != payment.Amount || existing.Currency != payment.Currency {
-		return Payment{}, ErrPaymentAmountImmutable
-	}
-
-	payment.Status = existing.Status
-	s.payments[payment.ID] = payment
 	return payment, nil
 }
 

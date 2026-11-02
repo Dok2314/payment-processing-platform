@@ -13,7 +13,6 @@ func newRouter(service *PaymentService) chi.Router {
 	r.Use(middleware.Logger)
 
 	r.Get("/health", healthHandler)
-
 	r.Get("/version", versionHandler)
 
 	r.Post("/payments", func(w http.ResponseWriter, r *http.Request) {
@@ -22,10 +21,6 @@ func newRouter(service *PaymentService) chi.Router {
 
 	r.Get("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		getPaymentHandler(service, w, r)
-	})
-
-	r.Put("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
-		updatePaymentHandler(service, w, r)
 	})
 
 	r.Post("/payments/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
