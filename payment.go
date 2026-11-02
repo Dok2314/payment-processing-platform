@@ -132,7 +132,7 @@ func (s *PaymentStore) UpdatePending(ctx context.Context, payment Payment) (Paym
 		return Payment{}, ErrPaymentCannotBeUpdated
 	}
 
-	if existing.Amount != payment.Amount {
+	if existing.Amount != payment.Amount || existing.Currency != payment.Currency {
 		return Payment{}, ErrPaymentAmountImmutable
 	}
 

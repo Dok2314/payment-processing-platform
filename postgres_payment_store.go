@@ -152,7 +152,7 @@ func (ps *PostgresPaymentStore) UpdatePending(
 		return Payment{}, ErrPaymentCannotBeUpdated
 	}
 
-	if existing.Amount != payment.Amount {
+	if existing.Amount != payment.Amount || existing.Currency != payment.Currency {
 		return Payment{}, ErrPaymentAmountImmutable
 	}
 
@@ -161,9 +161,8 @@ func (ps *PostgresPaymentStore) UpdatePending(
 	err = tx.QueryRow(ctx, `
 		UPDATE payments
 		SET user_id = $1,
-		    currency = $2,
-		    updated_at = NOW()
-		WHERE id = $3
+			updated_at = NOW()
+		WHERE id = $2
 		RETURNING id, user_id, amount, currency, status
 	`,
 		payment.UserID,
