@@ -21,7 +21,7 @@ const (
 
 type PaymentRequest struct {
 	UserID   string `json:"user_id"`
-	Amount   int64  `json:"amount"`
+	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 

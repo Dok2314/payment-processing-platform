@@ -133,7 +133,7 @@ func TestCreatePaymentMissingCurrency(t *testing.T) {
 }
 
 func TestCreatePaymentSuccess(t *testing.T) {
-	body := strings.NewReader(`{"user_id":"123","amount":10050,"currency":"USD"}`)
+	body := strings.NewReader(`{"user_id":"123","amount":"100.50","currency":"USD"}`)
 	req := httptest.NewRequest("POST", "/payments", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "test-order-123")
@@ -252,7 +252,7 @@ func TestUpdatePaymentSuccess(t *testing.T) {
 		Status:   PaymentStatusPending,
 	})
 
-	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
+	body := strings.NewReader(`{"user_id":"user-456","amount":"2.00","currency":"EUR"}`)
 	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -282,7 +282,7 @@ func TestUpdatePaymentNotFound(t *testing.T) {
 	service := NewPaymentService(store)
 	r := newRouter(service)
 
-	body := strings.NewReader(`{"user_id":"user-123","amount":100,"currency":"USD"}`)
+	body := strings.NewReader(`{"user_id":"user-123","amount":"1.00","currency":"USD"}`)
 	req := httptest.NewRequest("PUT", "/payments/nonexistent", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -506,7 +506,7 @@ func TestCancelPaymentSuccess(t *testing.T) {
 
 	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
-		Amount:   100,
+		Amount:   "1.00",
 		Currency: "USD",
 	})
 	if err != nil {
@@ -541,7 +541,7 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 
 	created, err := service.Create(ctx, "key-1", PaymentRequest{
 		UserID:   "user-1",
-		Amount:   100,
+		Amount:   "1.00",
 		Currency: "USD",
 	})
 	if err != nil {
@@ -571,7 +571,7 @@ func TestUpdatePaymentCompletedConflict(t *testing.T) {
 		Status:   PaymentStatusCompleted,
 	})
 
-	body := strings.NewReader(`{"user_id":"user-456","amount":200,"currency":"EUR"}`)
+	body := strings.NewReader(`{"user_id":"user-456","amount":"2.00","currency":"EUR"}`)
 	req := httptest.NewRequest("PUT", "/payments/payment-123", body)
 	req.Header.Set("Content-Type", "application/json")
 

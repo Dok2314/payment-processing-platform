@@ -40,9 +40,14 @@ func (s *PaymentService) Create(ctx context.Context, key string, payment Payment
 		return Payment{}, fmt.Errorf("encode payment request: %w", err)
 	}
 
+	amount, err := ParseAmount(payment.Amount, payment.Currency)
+	if err != nil {
+		return Payment{}, fmt.Errorf("%w: %v", ErrInvalidPayment, err)
+	}
+
 	createdPayment := Payment{
 		UserID:   payment.UserID,
-		Amount:   payment.Amount,
+		Amount:   amount,
 		Currency: payment.Currency,
 		Status:   PaymentStatusPending,
 	}
@@ -61,10 +66,15 @@ func (s *PaymentService) Update(ctx context.Context, id string, payment PaymentR
 		return Payment{}, err
 	}
 
+	amount, err := ParseAmount(payment.Amount, payment.Currency)
+	if err != nil {
+		return Payment{}, fmt.Errorf("%w: %v", ErrInvalidPayment, err)
+	}
+
 	updatedPayment := Payment{
 		ID:       id,
 		UserID:   payment.UserID,
-		Amount:   payment.Amount,
+		Amount:   amount,
 		Currency: payment.Currency,
 	}
 
@@ -81,9 +91,6 @@ func (s *PaymentService) Cancel(ctx context.Context, id string) (Payment, error)
 }
 
 func validatePayment(payment PaymentRequest) error {
-	if payment.Amount <= 0 {
-		return fmt.Errorf("%w: amount must be greater than zero", ErrInvalidPayment)
-	}
 	if payment.UserID == "" {
 		return fmt.Errorf("%w: user_id is required", ErrInvalidPayment)
 	}

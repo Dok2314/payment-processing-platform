@@ -64,6 +64,7 @@ func TestParseAmountInvalid(t *testing.T) {
 		{"0", "USD"},
 		{"100", "GBP"},
 		{"150.1", "JPY"},
+		{"999999999999999999999999", "USD"},
 	}
 
 	for _, tt := range tests {
