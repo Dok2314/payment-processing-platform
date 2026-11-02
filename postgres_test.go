@@ -323,11 +323,30 @@ func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 	ctx := context.Background()
 	testID := fmt.Sprintf("%d", time.Now().UnixNano())
 
-	amount1, _ := ParseAmount(req1.Amount, req1.Currency)
-	amount2, _ := ParseAmount(req2.Amount, req2.Currency)
-	amount3, _ := ParseAmount(req3.Amount, req3.Currency)
-	amount4, _ := ParseAmount(req4.Amount, req4.Currency)
-	amount5, _ := ParseAmount(req5.Amount, req5.Currency)
+	amount1, err := ParseAmount(req1.Amount, req1.Currency)
+	if err != nil {
+		t.Fatalf("parse req1 amount: %v", err)
+	}
+
+	amount2, err := ParseAmount(req2.Amount, req2.Currency)
+	if err != nil {
+		t.Fatalf("parse req2 amount: %v", err)
+	}
+
+	amount3, err := ParseAmount(req3.Amount, req3.Currency)
+	if err != nil {
+		t.Fatalf("parse req3 amount: %v", err)
+	}
+
+	amount4, err := ParseAmount(req4.Amount, req4.Currency)
+	if err != nil {
+		t.Fatalf("parse req4 amount: %v", err)
+	}
+
+	amount5, err := ParseAmount(req5.Amount, req5.Currency)
+	if err != nil {
+		t.Fatalf("parse req5 amount: %v", err)
+	}
 
 	payments := []Payment{
 		{ID: "payment-diff-1-" + testID, UserID: req1.UserID, Amount: amount1, Currency: req1.Currency, Status: PaymentStatusPending},
@@ -378,9 +397,9 @@ func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 	var count int
 
 	err = store.pool.QueryRow(ctx, `
-    	SELECT COUNT(*)
-    	FROM payments
-    	WHERE id LIKE '%' || $1
+		SELECT COUNT(*)
+		FROM payments
+		WHERE id LIKE 'payment-diff-%-' || $1
 	`, testID).Scan(&count)
 
 	if err != nil {
