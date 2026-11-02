@@ -27,5 +27,9 @@ func newRouter(service *PaymentService) chi.Router {
 		cancelPaymentHandler(service, w, r)
 	})
 
+	r.Post("/payments/{id}/process", func(w http.ResponseWriter, r *http.Request) {
+		moveToProcessingHandler(service, w, r)
+	})
+
 	return r
 }
