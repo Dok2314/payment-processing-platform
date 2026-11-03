@@ -548,3 +548,48 @@ func TestMoveToProcessingConcurrent(t *testing.T) {
 			successCount, rejectedCount)
 	}
 }
+
+func TestPostgresComplete(t *testing.T) {
+	store := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	paymentID := uuid.NewString()
+
+	payment := Payment{
+		ID:       paymentID,
+		UserID:   uuid.NewString(),
+		Amount:   1000,
+		Currency: "USD",
+		Status:   PaymentStatusProcessing,
+	}
+
+	key := uuid.NewString()
+	payloadHash := "test-payload-hash"
+
+	_, err := store.CreateIdempotent(ctx, key, payment, payloadHash)
+	if err != nil {
+		t.Fatalf("create payment: %v", err)
+	}
+
+	updated, err := store.Complete(ctx, paymentID)
+	if err != nil {
+		t.Fatalf("complete payment: %v", err)
+	}
+
+	if updated.Status != PaymentStatusCompleted {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusCompleted)
+	}
+
+	_, err = store.Complete(ctx, paymentID)
+
+	if !errors.Is(err, ErrPaymentCannotBeCompleted) {
+		t.Fatalf("expected ErrPaymentCannotBeCompleted, got %v", err)
+	}
+
+	_, err = store.Complete(ctx, uuid.NewString())
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}

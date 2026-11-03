@@ -147,3 +147,22 @@ func (s *PaymentStore) MoveToProcessing(ctx context.Context, id string) (Payment
 
 	return payment, nil
 }
+
+func (s *PaymentStore) Complete(ctx context.Context, id string) (Payment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if payment.Status != PaymentStatusProcessing {
+		return Payment{}, ErrPaymentCannotBeCompleted
+	}
+
+	payment.Status = PaymentStatusCompleted
+	s.payments[id] = payment
+
+	return payment, nil
+}

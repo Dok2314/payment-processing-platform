@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -440,5 +441,73 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	_, err = service.Cancel(ctx, created.ID)
 	if err == nil {
 		t.Fatal("expected cancellation of an already cancelled payment to fail")
+	}
+}
+
+func TestPaymentStoreMoveToProcessing(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-process-1",
+		Status: PaymentStatusPending,
+	}
+
+	store.Save(payment)
+
+	updated, err := store.MoveToProcessing(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("move to processing: %v", err)
+	}
+
+	if updated.Status != PaymentStatusProcessing {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusProcessing)
+	}
+
+	_, err = store.MoveToProcessing(ctx, payment.ID)
+
+	if !errors.Is(err, ErrPaymentCannotBeProcessed) {
+		t.Fatalf("expected ErrPaymentCannotBeProcessed, got %v", err)
+	}
+
+	_, err = store.MoveToProcessing(ctx, "missing-payment")
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}
+
+func TestPaymentStoreComplete(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-process-1",
+		Status: PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	updated, err := store.Complete(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("complete payment: %v", err)
+	}
+
+	if updated.Status != PaymentStatusCompleted {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusCompleted)
+	}
+
+	_, err = store.Complete(ctx, payment.ID)
+
+	if !errors.Is(err, ErrPaymentCannotBeCompleted) {
+		t.Fatalf("expected ErrPaymentCannotBeCompleted, got %v", err)
+	}
+
+	_, err = store.Complete(ctx, "missing-payment")
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
 	}
 }
