@@ -17,9 +17,7 @@ import (
 func newTestPostgresStore(t *testing.T) *PostgresPaymentStore {
 	t.Helper()
 
-	if err := godotenv.Load(); err != nil {
-		t.Fatalf("load .env: %v", err)
-	}
+	_ = godotenv.Load()
 
 	ctx := context.Background()
 
@@ -50,7 +48,7 @@ func TestPostgresGetNotFound(t *testing.T) {
 	store := newTestPostgresStore(t)
 
 	ctx := context.Background()
-	id := fmt.Sprintf("missing-payment-%d", time.Now().UnixNano())
+	id := uuid.NewString()
 
 	_, err := store.Get(ctx, id)
 	if !errors.Is(err, ErrPaymentNotFound) {
@@ -72,7 +70,7 @@ func TestPostgresCreateAndGet(t *testing.T) {
 	}
 
 	payment := Payment{
-		ID:       fmt.Sprintf("payment-%d", time.Now().UnixNano()),
+		ID:       uuid.NewString(),
 		UserID:   "user-123",
 		Amount:   10050,
 		Currency: "USD",
@@ -128,7 +126,7 @@ func TestPostgresCreateIdempotent(t *testing.T) {
 	}
 
 	payment := Payment{
-		ID:       fmt.Sprintf("payment-test-%d", time.Now().UnixNano()),
+		ID:       uuid.NewString(),
 		UserID:   "user-123",
 		Amount:   10050,
 		Currency: "USD",
@@ -146,7 +144,7 @@ func TestPostgresCreateIdempotent(t *testing.T) {
 	}
 
 	payment2 := payment
-	payment2.ID = "payment-test-456"
+	payment2.ID = uuid.NewString()
 
 	second, err := store.CreateIdempotent(ctx, key, payment2, hash)
 	if err != nil {
@@ -196,7 +194,7 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 	}
 
 	payment := Payment{
-		ID:       fmt.Sprintf("payment-%d", time.Now().UnixNano()),
+		ID:       uuid.NewString(),
 		UserID:   req.UserID,
 		Amount:   amount,
 		Currency: req.Currency,
@@ -263,116 +261,69 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 }
 
 func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
-	key := fmt.Sprintf("idempotency-test-%d", time.Now().UnixNano())
-
-	req1 := PaymentRequest{
-		UserID:   "user-123",
-		Amount:   "100.50",
-		Currency: "USD",
-	}
-
-	req2 := PaymentRequest{
-		UserID:   "user-456",
-		Amount:   "200.50",
-		Currency: "EUR",
-	}
-
-	req3 := PaymentRequest{
-		UserID:   "user-789",
-		Amount:   "300.50",
-		Currency: "USD",
-	}
-
-	req4 := PaymentRequest{
-		UserID:   "user-987",
-		Amount:   "400.50",
-		Currency: "EUR",
-	}
-
-	req5 := PaymentRequest{
-		UserID:   "user-10123",
-		Amount:   "500.50",
-		Currency: "USD",
-	}
-
-	hash1, err := payloadHash(req1)
-	if err != nil {
-		t.Fatalf("hash req1: %v", err)
-	}
-
-	hash2, err := payloadHash(req2)
-	if err != nil {
-		t.Fatalf("hash req2: %v", err)
-	}
-
-	hash3, err := payloadHash(req3)
-	if err != nil {
-		t.Fatalf("hash req3: %v", err)
-	}
-
-	hash4, err := payloadHash(req4)
-	if err != nil {
-		t.Fatalf("hash req4: %v", err)
-	}
-
-	hash5, err := payloadHash(req5)
-	if err != nil {
-		t.Fatalf("hash req5: %v", err)
-	}
-
 	store := newTestPostgresStore(t)
 	ctx := context.Background()
-	testID := fmt.Sprintf("%d", time.Now().UnixNano())
 
-	amount1, err := ParseAmount(req1.Amount, req1.Currency)
-	if err != nil {
-		t.Fatalf("parse req1 amount: %v", err)
+	key := fmt.Sprintf("idempotency-test-%d", time.Now().UnixNano())
+
+	requests := []PaymentRequest{
+		{UserID: "user-123", Amount: "100.50", Currency: "USD"},
+		{UserID: "user-456", Amount: "200.50", Currency: "EUR"},
+		{UserID: "user-789", Amount: "300.50", Currency: "USD"},
+		{UserID: "user-987", Amount: "400.50", Currency: "EUR"},
+		{UserID: "user-10123", Amount: "500.50", Currency: "USD"},
 	}
 
-	amount2, err := ParseAmount(req2.Amount, req2.Currency)
-	if err != nil {
-		t.Fatalf("parse req2 amount: %v", err)
+	payments := make([]Payment, len(requests))
+	hashes := make([]string, len(requests))
+
+	for i, req := range requests {
+		amount, err := ParseAmount(req.Amount, req.Currency)
+		if err != nil {
+			t.Fatalf("parse amount %d: %v", i, err)
+		}
+
+		hash, err := payloadHash(req)
+		if err != nil {
+			t.Fatalf("payload hash %d: %v", i, err)
+		}
+
+		payments[i] = Payment{
+			ID:       uuid.NewString(),
+			UserID:   req.UserID,
+			Amount:   amount,
+			Currency: req.Currency,
+			Status:   PaymentStatusPending,
+		}
+
+		hashes[i] = hash
 	}
 
-	amount3, err := ParseAmount(req3.Amount, req3.Currency)
-	if err != nil {
-		t.Fatalf("parse req3 amount: %v", err)
-	}
-
-	amount4, err := ParseAmount(req4.Amount, req4.Currency)
-	if err != nil {
-		t.Fatalf("parse req4 amount: %v", err)
-	}
-
-	amount5, err := ParseAmount(req5.Amount, req5.Currency)
-	if err != nil {
-		t.Fatalf("parse req5 amount: %v", err)
-	}
-
-	payments := []Payment{
-		{ID: "payment-diff-1-" + testID, UserID: req1.UserID, Amount: amount1, Currency: req1.Currency, Status: PaymentStatusPending},
-		{ID: "payment-diff-2-" + testID, UserID: req2.UserID, Amount: amount2, Currency: req2.Currency, Status: PaymentStatusPending},
-		{ID: "payment-diff-3-" + testID, UserID: req3.UserID, Amount: amount3, Currency: req3.Currency, Status: PaymentStatusPending},
-		{ID: "payment-diff-4-" + testID, UserID: req4.UserID, Amount: amount4, Currency: req4.Currency, Status: PaymentStatusPending},
-		{ID: "payment-diff-5-" + testID, UserID: req5.UserID, Amount: amount5, Currency: req5.Currency, Status: PaymentStatusPending},
-	}
-
-	hashes := []string{hash1, hash2, hash3, hash4, hash5}
-
-	var wg sync.WaitGroup
+	start := make(chan struct{})
 	errs := make(chan error, len(payments))
 
-	wg.Add(len(payments))
+	var wg sync.WaitGroup
 
 	for i := range payments {
+		wg.Add(1)
+
 		go func(i int) {
 			defer wg.Done()
 
-			_, err := store.CreateIdempotent(ctx, key, payments[i], hashes[i])
+			<-start
+
+			_, err := store.CreateIdempotent(
+				ctx,
+				key,
+				payments[i],
+				hashes[i],
+			)
+
 			errs <- err
 		}(i)
 	}
 
+	close(start)
 	wg.Wait()
 	close(errs)
 
@@ -391,13 +342,13 @@ func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 		t.Fatalf("successes: got %d, want 1", successes)
 	}
 
-	if failures != 4 {
-		t.Fatalf("failures: got %d, want 4", failures)
+	if failures != len(payments)-1 {
+		t.Fatalf("failures: got %d, want %d", failures, len(payments)-1)
 	}
 
 	var count int
 
-	err = store.pool.QueryRow(ctx, `
+	err := store.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM payments
 		WHERE id = ANY($1)
