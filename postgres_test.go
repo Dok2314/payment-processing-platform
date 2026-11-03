@@ -400,8 +400,14 @@ func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 	err = store.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM payments
-		WHERE id LIKE 'payment-diff-%-' || $1
-	`, testID).Scan(&count)
+		WHERE id = ANY($1)
+	`, []string{
+		payments[0].ID,
+		payments[1].ID,
+		payments[2].ID,
+		payments[3].ID,
+		payments[4].ID,
+	}).Scan(&count)
 
 	if err != nil {
 		t.Fatalf("count payments: %v", err)

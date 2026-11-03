@@ -699,3 +699,69 @@ func TestPaymentStoreFailConcurrent(t *testing.T) {
 			successes, rejections)
 	}
 }
+
+func TestCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
+	store := NewPaymentStore()
+
+	const workers = 5
+
+	start := make(chan struct{})
+	results := make(chan error, workers)
+
+	var wg sync.WaitGroup
+
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			defer wg.Done()
+
+			payment := Payment{
+				ID:       fmt.Sprintf("payment-diff-%d", i),
+				UserID:   fmt.Sprintf("user-%d", i),
+				Amount:   int64(10000 + i),
+				Currency: "USD",
+			}
+
+			<-start
+
+			_, err := store.CreateIdempotent(
+				context.Background(),
+				"same-idempotency-key",
+				payment,
+				fmt.Sprintf("hash-%d", i),
+			)
+
+			results <- err
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	failures := 0
+
+	for err := range results {
+		if err == nil {
+			successes++
+		} else {
+			failures++
+		}
+	}
+
+	if successes != 1 || failures != workers-1 {
+		t.Fatalf("expected 1 success and %d failures, got %d and %d",
+			workers-1, successes, failures)
+	}
+
+	if len(store.payments) != 1 {
+		t.Fatalf("expected 1 payment, got %d", len(store.payments))
+	}
+
+	if len(store.idempotencyKeys) != 1 {
+		t.Fatalf("expected 1 idempotency key, got %d",
+			len(store.idempotencyKeys))
+	}
+}
