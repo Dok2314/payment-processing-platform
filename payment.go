@@ -101,7 +101,7 @@ func (s *PaymentStore) CreateIdempotent(
 	ir, ok := s.idempotencyKeys[key]
 	if ok {
 		if payloadHash != ir.PayloadHash {
-			return Payment{}, errors.New("idempotency key reused with different payload")
+			return Payment{}, ErrIdempotencyKeyReuse
 		}
 
 		p, exists := s.payments[ir.PaymentID]

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -28,9 +29,33 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 
 	var payment PaymentRequest
 
-	err := json.NewDecoder(r.Body).Decode(&payment)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&payment)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err = decoder.Decode(&struct{}{})
+	if err != io.EOF {
+		var maxBytesErr *http.MaxBytesError
+
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		http.Error(w, "request body must contain only one JSON object", http.StatusBadRequest)
 		return
 	}
 
@@ -38,6 +63,11 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if errors.Is(err, ErrIdempotencyKeyReuse) {
+			http.Error(w, "idempotency key reused with different payload", http.StatusConflict)
 			return
 		}
 
@@ -110,6 +140,54 @@ func moveToProcessingHandler(service *PaymentService, w http.ResponseWriter, r *
 		}
 
 		log.Printf("process payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func completePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, err := service.Complete(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeCompleted) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("complete payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func failPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, err := service.Fail(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeFailed) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("fail payment error: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

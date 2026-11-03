@@ -10,6 +10,8 @@ import (
 
 var ErrPaymentNotFound = errors.New("payment not found")
 var ErrInvalidPayment = errors.New("invalid payment")
+var ErrIdempotencyKeyReuse = errors.New("idempotency key reused with different payload")
+
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeProcessed = errors.New("payment cannot be processed")
 var ErrPaymentCannotBeCompleted = errors.New("payment cannot be completed")
@@ -81,4 +83,12 @@ func validatePayment(payment PaymentRequest) error {
 
 func (s *PaymentService) MoveToProcessing(ctx context.Context, id string) (Payment, error) {
 	return s.store.MoveToProcessing(ctx, id)
+}
+
+func (s *PaymentService) Complete(ctx context.Context, id string) (Payment, error) {
+	return s.store.Complete(ctx, id)
+}
+
+func (s *PaymentService) Fail(ctx context.Context, id string) (Payment, error) {
+	return s.store.Fail(ctx, id)
 }

@@ -765,3 +765,264 @@ func TestCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 			len(store.idempotencyKeys))
 	}
 }
+
+func TestCompletePaymentSuccess(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	payment := Payment{
+		ID:       "payment-complete-api",
+		UserID:   "user-123",
+		Amount:   10000,
+		Currency: "USD",
+		Status:   PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	r := newRouter(service)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments/"+payment.ID+"/complete",
+		nil,
+	)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var got Payment
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if got.Status != PaymentStatusCompleted {
+		t.Fatalf("expected status %q, got %q",
+			PaymentStatusCompleted, got.Status)
+	}
+}
+
+func TestCompletePaymentConflict(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	payment := Payment{
+		ID:       "payment-complete-conflict",
+		UserID:   "user-123",
+		Amount:   10000,
+		Currency: "USD",
+		Status:   PaymentStatusPending,
+	}
+
+	store.Save(payment)
+
+	r := newRouter(service)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments/"+payment.ID+"/complete",
+		nil,
+	)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusConflict, w.Code, w.Body.String())
+	}
+}
+
+func TestFailPaymentSuccess(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	payment := Payment{
+		ID:       "payment-fail-api",
+		UserID:   "user-123",
+		Amount:   10000,
+		Currency: "USD",
+		Status:   PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	r := newRouter(service)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments/"+payment.ID+"/fail",
+		nil,
+	)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var got Payment
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if got.Status != PaymentStatusFailed {
+		t.Fatalf("expected status %q, got %q",
+			PaymentStatusFailed, got.Status)
+	}
+}
+
+func TestFailPaymentConflict(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	payment := Payment{
+		ID:       "payment-fail-conflict",
+		UserID:   "user-123",
+		Amount:   10000,
+		Currency: "USD",
+		Status:   PaymentStatusPending,
+	}
+
+	store.Save(payment)
+
+	r := newRouter(service)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments/"+payment.ID+"/fail",
+		nil,
+	)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusConflict, w.Code, w.Body.String())
+	}
+}
+
+func TestCompleteAndFailPaymentNotFound(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	endpoints := []string{
+		"/payments/nonexistent/complete",
+		"/payments/nonexistent/fail",
+	}
+
+	for _, endpoint := range endpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, endpoint, nil)
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("expected status %d, got %d; body: %s",
+					http.StatusNotFound, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestCreatePaymentIdempotencyKeyReuse(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	firstBody := strings.NewReader(
+		`{"user_id":"123","amount":"100.00","currency":"USD"}`,
+	)
+
+	firstReq := httptest.NewRequest(http.MethodPost, "/payments", firstBody)
+	firstReq.Header.Set("Content-Type", "application/json")
+	firstReq.Header.Set("Idempotency-Key", "same-key")
+
+	firstW := httptest.NewRecorder()
+	r.ServeHTTP(firstW, firstReq)
+
+	if firstW.Code != http.StatusCreated {
+		t.Fatalf("first request: expected %d, got %d",
+			http.StatusCreated, firstW.Code)
+	}
+
+	secondBody := strings.NewReader(
+		`{"user_id":"123","amount":"200.00","currency":"USD"}`,
+	)
+
+	secondReq := httptest.NewRequest(http.MethodPost, "/payments", secondBody)
+	secondReq.Header.Set("Content-Type", "application/json")
+	secondReq.Header.Set("Idempotency-Key", "same-key")
+
+	secondW := httptest.NewRecorder()
+	r.ServeHTTP(secondW, secondReq)
+
+	if secondW.Code != http.StatusConflict {
+		t.Fatalf("second request: expected %d, got %d; body: %s",
+			http.StatusConflict, secondW.Code, secondW.Body.String())
+	}
+}
+
+func TestCreatePaymentBodyTooLarge(t *testing.T) {
+	body := strings.NewReader(
+		`{"user_id":"123","amount":"100.00","currency":"USD","padding":"` +
+			strings.Repeat("a", 1<<20) +
+			`"}`,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/payments", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-body-too-large")
+
+	w := httptest.NewRecorder()
+
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf(
+			"expected status %d, got %d; body: %s",
+			http.StatusRequestEntityTooLarge,
+			w.Code,
+			w.Body.String(),
+		)
+	}
+}
+
+func TestCreatePaymentRejectsMultipleJSONObjects(t *testing.T) {
+	body := `{"user_id":"123","amount":"100.00","currency":"USD"}
+{"user_id":"456","amount":"200.00","currency":"USD"}`
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments",
+		strings.NewReader(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-multiple-json")
+
+	w := httptest.NewRecorder()
+
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusBadRequest,
+			w.Code,
+			w.Body.String(),
+		)
+	}
+}
