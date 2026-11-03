@@ -997,3 +997,32 @@ func TestCreatePaymentBodyTooLarge(t *testing.T) {
 		)
 	}
 }
+
+func TestCreatePaymentRejectsMultipleJSONObjects(t *testing.T) {
+	body := `{"user_id":"123","amount":"100.00","currency":"USD"}
+{"user_id":"456","amount":"200.00","currency":"USD"}`
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments",
+		strings.NewReader(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-multiple-json")
+
+	w := httptest.NewRecorder()
+
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusBadRequest,
+			w.Code,
+			w.Body.String(),
+		)
+	}
+}
