@@ -93,3 +93,27 @@ func cancelPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payment)
 }
+
+func moveToProcessingHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, err := service.MoveToProcessing(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeProcessed) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("process payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}

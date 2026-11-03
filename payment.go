@@ -128,3 +128,60 @@ func payloadHash(payment PaymentRequest) (string, error) {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+func (s *PaymentStore) MoveToProcessing(ctx context.Context, id string) (Payment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if payment.Status != PaymentStatusPending {
+		return Payment{}, ErrPaymentCannotBeProcessed
+	}
+
+	payment.Status = PaymentStatusProcessing
+	s.payments[id] = payment
+
+	return payment, nil
+}
+
+func (s *PaymentStore) Complete(ctx context.Context, id string) (Payment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if payment.Status != PaymentStatusProcessing {
+		return Payment{}, ErrPaymentCannotBeCompleted
+	}
+
+	payment.Status = PaymentStatusCompleted
+	s.payments[id] = payment
+
+	return payment, nil
+}
+
+func (s *PaymentStore) Fail(ctx context.Context, id string) (Payment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if payment.Status != PaymentStatusProcessing {
+		return Payment{}, ErrPaymentCannotBeFailed
+	}
+
+	payment.Status = PaymentStatusFailed
+	s.payments[id] = payment
+
+	return payment, nil
+}

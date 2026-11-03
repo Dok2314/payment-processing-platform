@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -440,5 +441,327 @@ func TestCancelPaymentAlreadyCancelled(t *testing.T) {
 	_, err = service.Cancel(ctx, created.ID)
 	if err == nil {
 		t.Fatal("expected cancellation of an already cancelled payment to fail")
+	}
+}
+
+func TestPaymentStoreMoveToProcessing(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-process-1",
+		Status: PaymentStatusPending,
+	}
+
+	store.Save(payment)
+
+	updated, err := store.MoveToProcessing(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("move to processing: %v", err)
+	}
+
+	if updated.Status != PaymentStatusProcessing {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusProcessing)
+	}
+
+	_, err = store.MoveToProcessing(ctx, payment.ID)
+
+	if !errors.Is(err, ErrPaymentCannotBeProcessed) {
+		t.Fatalf("expected ErrPaymentCannotBeProcessed, got %v", err)
+	}
+
+	_, err = store.MoveToProcessing(ctx, "missing-payment")
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}
+
+func TestPaymentStoreComplete(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-process-1",
+		Status: PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	updated, err := store.Complete(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("complete payment: %v", err)
+	}
+
+	if updated.Status != PaymentStatusCompleted {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusCompleted)
+	}
+
+	_, err = store.Complete(ctx, payment.ID)
+
+	if !errors.Is(err, ErrPaymentCannotBeCompleted) {
+		t.Fatalf("expected ErrPaymentCannotBeCompleted, got %v", err)
+	}
+
+	_, err = store.Complete(ctx, "missing-payment")
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}
+
+func TestPaymentStoreFail(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-fail-1",
+		Status: PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	updated, err := store.Fail(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("fail payment: %v", err)
+	}
+
+	if updated.Status != PaymentStatusFailed {
+		t.Fatalf("status: got %q, want %q",
+			updated.Status, PaymentStatusFailed)
+	}
+
+	_, err = store.Fail(ctx, payment.ID)
+	if !errors.Is(err, ErrPaymentCannotBeFailed) {
+		t.Fatalf("expected ErrPaymentCannotBeFailed, got %v", err)
+	}
+
+	_, err = store.Fail(ctx, "missing-payment")
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}
+
+func TestPaymentStoreMoveToProcessingConcurrent(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-process-concurrent",
+		Status: PaymentStatusPending,
+	}
+
+	store.Save(payment)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			_, err := store.MoveToProcessing(ctx, payment.ID)
+			results <- err
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	rejections := 0
+
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, ErrPaymentCannotBeProcessed) {
+			rejections++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 || rejections != 1 {
+		t.Fatalf("expected 1 success and 1 rejection, got %d and %d",
+			successes, rejections)
+	}
+}
+
+func TestPaymentStoreCompleteConcurrent(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-complete-concurrent",
+		Status: PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			_, err := store.Complete(ctx, payment.ID)
+			results <- err
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	rejections := 0
+
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, ErrPaymentCannotBeCompleted) {
+			rejections++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 || rejections != 1 {
+		t.Fatalf("expected 1 success and 1 rejection, got %d and %d",
+			successes, rejections)
+	}
+}
+
+func TestPaymentStoreFailConcurrent(t *testing.T) {
+	store := NewPaymentStore()
+	ctx := context.Background()
+
+	payment := Payment{
+		ID:     "payment-fail-concurrent",
+		Status: PaymentStatusProcessing,
+	}
+
+	store.Save(payment)
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			_, err := store.Fail(ctx, payment.ID)
+			results <- err
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	rejections := 0
+
+	for err := range results {
+		if err == nil {
+			successes++
+		} else if errors.Is(err, ErrPaymentCannotBeFailed) {
+			rejections++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if successes != 1 || rejections != 1 {
+		t.Fatalf("expected 1 success and 1 rejection, got %d and %d",
+			successes, rejections)
+	}
+}
+
+func TestCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
+	store := NewPaymentStore()
+
+	const workers = 5
+
+	start := make(chan struct{})
+	results := make(chan error, workers)
+
+	var wg sync.WaitGroup
+
+	wg.Add(workers)
+
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			defer wg.Done()
+
+			payment := Payment{
+				ID:       fmt.Sprintf("payment-diff-%d", i),
+				UserID:   fmt.Sprintf("user-%d", i),
+				Amount:   int64(10000 + i),
+				Currency: "USD",
+			}
+
+			<-start
+
+			_, err := store.CreateIdempotent(
+				context.Background(),
+				"same-idempotency-key",
+				payment,
+				fmt.Sprintf("hash-%d", i),
+			)
+
+			results <- err
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	failures := 0
+
+	for err := range results {
+		if err == nil {
+			successes++
+		} else {
+			failures++
+		}
+	}
+
+	if successes != 1 || failures != workers-1 {
+		t.Fatalf("expected 1 success and %d failures, got %d and %d",
+			workers-1, successes, failures)
+	}
+
+	if len(store.payments) != 1 {
+		t.Fatalf("expected 1 payment, got %d", len(store.payments))
+	}
+
+	if len(store.idempotencyKeys) != 1 {
+		t.Fatalf("expected 1 idempotency key, got %d",
+			len(store.idempotencyKeys))
 	}
 }
