@@ -31,5 +31,13 @@ func newRouter(service *PaymentService) chi.Router {
 		moveToProcessingHandler(service, w, r)
 	})
 
+	r.Post("/payments/{id}/complete", func(w http.ResponseWriter, r *http.Request) {
+		completePaymentHandler(service, w, r)
+	})
+
+	r.Post("/payments/{id}/fail", func(w http.ResponseWriter, r *http.Request) {
+		failPaymentHandler(service, w, r)
+	})
+
 	return r
 }

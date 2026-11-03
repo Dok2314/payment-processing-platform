@@ -82,3 +82,11 @@ func validatePayment(payment PaymentRequest) error {
 func (s *PaymentService) MoveToProcessing(ctx context.Context, id string) (Payment, error) {
 	return s.store.MoveToProcessing(ctx, id)
 }
+
+func (s *PaymentService) Complete(ctx context.Context, id string) (Payment, error) {
+	return s.store.Complete(ctx, id)
+}
+
+func (s *PaymentService) Fail(ctx context.Context, id string) (Payment, error) {
+	return s.store.Fail(ctx, id)
+}

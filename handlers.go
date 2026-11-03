@@ -117,3 +117,51 @@ func moveToProcessingHandler(service *PaymentService, w http.ResponseWriter, r *
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payment)
 }
+
+func completePaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, err := service.Complete(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeCompleted) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("complete payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
+
+func failPaymentHandler(service *PaymentService, w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	payment, err := service.Fail(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrPaymentNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, ErrPaymentCannotBeFailed) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		log.Printf("fail payment error: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payment)
+}
