@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -408,5 +409,142 @@ func TestPostgresCreateIdempotentConcurrentDifferentPayload(t *testing.T) {
 
 	if count != 1 {
 		t.Fatalf("payment count: got %d, want 1", count)
+	}
+}
+
+func TestMoveToProcessing(t *testing.T) {
+	store := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	key := fmt.Sprintf("move-processing-%d", time.Now().UnixNano())
+
+	req := PaymentRequest{
+		UserID:   "test-user",
+		Amount:   "10.00",
+		Currency: "USD",
+	}
+
+	amount, err := ParseAmount(req.Amount, req.Currency)
+	if err != nil {
+		t.Fatalf("parse amount: %v", err)
+	}
+
+	hash, err := payloadHash(req)
+	if err != nil {
+		t.Fatalf("payload hash: %v", err)
+	}
+
+	payment := Payment{
+		ID:       uuid.NewString(),
+		UserID:   req.UserID,
+		Amount:   amount,
+		Currency: req.Currency,
+		Status:   PaymentStatusPending,
+	}
+
+	_, err = store.CreateIdempotent(ctx, key, payment, hash)
+	if err != nil {
+		t.Fatalf("create payment: %v", err)
+	}
+
+	updatedPayment, err := store.MoveToProcessing(ctx, payment.ID)
+	if err != nil {
+		t.Fatalf("move to processing: %v", err)
+	}
+
+	if updatedPayment.Status != PaymentStatusProcessing {
+		t.Fatalf(
+			"status: got %q, want %q",
+			updatedPayment.Status,
+			PaymentStatusProcessing,
+		)
+	}
+
+	_, err = store.MoveToProcessing(ctx, payment.ID)
+
+	if !errors.Is(err, ErrPaymentCannotBeProcessed) {
+		t.Fatalf("expected ErrPaymentCannotBeProcessed, got %v", err)
+	}
+
+	_, err = store.MoveToProcessing(ctx, uuid.NewString())
+
+	if !errors.Is(err, ErrPaymentNotFound) {
+		t.Fatalf("expected ErrPaymentNotFound, got %v", err)
+	}
+}
+
+func TestMoveToProcessingConcurrent(t *testing.T) {
+	store := newTestPostgresStore(t)
+	ctx := context.Background()
+
+	key := fmt.Sprintf("move-processing-concurrent-%d", time.Now().UnixNano())
+
+	req := PaymentRequest{
+		UserID:   "test-user",
+		Amount:   "100.00",
+		Currency: "USD",
+	}
+
+	amount, err := ParseAmount(req.Amount, req.Currency)
+	if err != nil {
+		t.Fatalf("parse amount: %v", err)
+	}
+
+	hash, err := payloadHash(req)
+	if err != nil {
+		t.Fatalf("payload hash: %v", err)
+	}
+
+	payment := Payment{
+		ID:       uuid.NewString(),
+		UserID:   req.UserID,
+		Amount:   amount,
+		Currency: req.Currency,
+		Status:   PaymentStatusPending,
+	}
+
+	_, err = store.CreateIdempotent(ctx, key, payment, hash)
+	if err != nil {
+		t.Fatalf("create payment: %v", err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, 2)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			_, err := store.MoveToProcessing(ctx, payment.ID)
+			results <- err
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successCount := 0
+	rejectedCount := 0
+
+	for err := range results {
+		if err == nil {
+			successCount++
+		} else if errors.Is(err, ErrPaymentCannotBeProcessed) {
+			rejectedCount++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if successCount != 1 || rejectedCount != 1 {
+		t.Fatalf("expected 1 success and 1 rejection, got %d success and %d rejections",
+			successCount, rejectedCount)
 	}
 }

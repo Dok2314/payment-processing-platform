@@ -138,3 +138,42 @@ func (ps *PostgresPaymentStore) CancelPending(ctx context.Context, id string) (P
 
 	return ps.Get(ctx, id)
 }
+
+func (ps *PostgresPaymentStore) MoveToProcessing(ctx context.Context, id string) (Payment, error) {
+	var payment Payment
+
+	err := ps.pool.QueryRow(ctx, `
+		UPDATE payments
+		SET status = $1,
+		    updated_at = NOW()
+		WHERE id = $2
+		  AND status = $3
+		RETURNING id, user_id, amount, currency, status
+	`, PaymentStatusProcessing, id, PaymentStatusPending).Scan(
+		&payment.ID,
+		&payment.UserID,
+		&payment.Amount,
+		&payment.Currency,
+		&payment.Status,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, getErr := ps.Get(ctx, id)
+
+			if errors.Is(getErr, ErrPaymentNotFound) {
+				return Payment{}, ErrPaymentNotFound
+			}
+
+			if getErr != nil {
+				return Payment{}, fmt.Errorf("check payment before processing: %w", getErr)
+			}
+
+			return Payment{}, ErrPaymentCannotBeProcessed
+		}
+
+		return Payment{}, fmt.Errorf("process payment: %w", err)
+	}
+
+	return payment, nil
+}
