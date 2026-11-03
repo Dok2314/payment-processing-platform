@@ -208,7 +208,9 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 
 	const workers = 5
 
+	start := make(chan struct{})
 	var wg sync.WaitGroup
+
 	results := make(chan Payment, workers)
 	errs := make(chan error, workers)
 
@@ -217,6 +219,8 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 	for range workers {
 		go func() {
 			defer wg.Done()
+
+			<-start
 
 			p, err := store.CreateIdempotent(ctx, key, payment, hash)
 			if err != nil {
@@ -228,6 +232,7 @@ func TestPostgresCreateIdempotentConcurrent(t *testing.T) {
 		}()
 	}
 
+	close(start)
 	wg.Wait()
 	close(results)
 	close(errs)
