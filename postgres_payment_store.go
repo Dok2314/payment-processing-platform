@@ -73,7 +73,7 @@ func (ps *PostgresPaymentStore) CreateIdempotent(
 
 	if err == nil {
 		if existingPayloadHash != payloadHash {
-			return Payment{}, errors.New("idempotency key reused with different payload")
+			return Payment{}, ErrIdempotencyKeyReuse
 		}
 
 		if err := tx.Commit(ctx); err != nil {

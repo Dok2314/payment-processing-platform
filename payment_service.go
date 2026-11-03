@@ -10,6 +10,8 @@ import (
 
 var ErrPaymentNotFound = errors.New("payment not found")
 var ErrInvalidPayment = errors.New("invalid payment")
+var ErrIdempotencyKeyReuse = errors.New("idempotency key reused with different payload")
+
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeProcessed = errors.New("payment cannot be processed")
 var ErrPaymentCannotBeCompleted = errors.New("payment cannot be completed")

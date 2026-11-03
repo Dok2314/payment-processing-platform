@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -28,9 +29,33 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 
 	var payment PaymentRequest
 
-	err := json.NewDecoder(r.Body).Decode(&payment)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	decoder := json.NewDecoder(r.Body)
+
+	err := decoder.Decode(&payment)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	err = decoder.Decode(&struct{}{})
+	if err != io.EOF {
+		var maxBytesErr *http.MaxBytesError
+
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		http.Error(w, "request body must contain only one JSON object", http.StatusBadRequest)
 		return
 	}
 
@@ -38,6 +63,11 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	if err != nil {
 		if errors.Is(err, ErrInvalidPayment) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if errors.Is(err, ErrIdempotencyKeyReuse) {
+			http.Error(w, "idempotency key reused with different payload", http.StatusConflict)
 			return
 		}
 
