@@ -216,3 +216,42 @@ func (ps *PostgresPaymentStore) Complete(ctx context.Context, id string) (Paymen
 
 	return payment, nil
 }
+
+func (ps *PostgresPaymentStore) Fail(ctx context.Context, id string) (Payment, error) {
+	var payment Payment
+
+	err := ps.pool.QueryRow(ctx, `
+		UPDATE payments
+		SET status = $1,
+			updated_at = NOW()
+		WHERE id = $2
+		AND status = $3
+		RETURNING id, user_id, amount, currency, status
+	`, PaymentStatusFailed, id, PaymentStatusProcessing).Scan(
+		&payment.ID,
+		&payment.UserID,
+		&payment.Amount,
+		&payment.Currency,
+		&payment.Status,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, getErr := ps.Get(ctx, id)
+
+			if errors.Is(getErr, ErrPaymentNotFound) {
+				return Payment{}, ErrPaymentNotFound
+			}
+
+			if getErr != nil {
+				return Payment{}, fmt.Errorf("check payment before failing: %w", getErr)
+			}
+
+			return Payment{}, ErrPaymentCannotBeFailed
+		}
+
+		return Payment{}, fmt.Errorf("fail payment: %w", err)
+	}
+
+	return payment, nil
+}

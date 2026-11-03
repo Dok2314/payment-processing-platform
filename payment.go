@@ -166,3 +166,22 @@ func (s *PaymentStore) Complete(ctx context.Context, id string) (Payment, error)
 
 	return payment, nil
 }
+
+func (s *PaymentStore) Fail(ctx context.Context, id string) (Payment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	payment, ok := s.payments[id]
+	if !ok {
+		return Payment{}, ErrPaymentNotFound
+	}
+
+	if payment.Status != PaymentStatusProcessing {
+		return Payment{}, ErrPaymentCannotBeFailed
+	}
+
+	payment.Status = PaymentStatusFailed
+	s.payments[id] = payment
+
+	return payment, nil
+}

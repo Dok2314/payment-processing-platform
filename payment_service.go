@@ -13,6 +13,7 @@ var ErrInvalidPayment = errors.New("invalid payment")
 var ErrPaymentCannotBeCancelled = errors.New("payment cannot be cancelled")
 var ErrPaymentCannotBeProcessed = errors.New("payment cannot be processed")
 var ErrPaymentCannotBeCompleted = errors.New("payment cannot be completed")
+var ErrPaymentCannotBeFailed = errors.New("payment cannot be failed")
 
 type PaymentRepository interface {
 	CreateIdempotent(ctx context.Context, key string, payment Payment, payloadHash string) (Payment, error)
@@ -20,6 +21,7 @@ type PaymentRepository interface {
 	CancelPending(ctx context.Context, id string) (Payment, error)
 	MoveToProcessing(ctx context.Context, id string) (Payment, error)
 	Complete(ctx context.Context, id string) (Payment, error)
+	Fail(ctx context.Context, id string) (Payment, error)
 }
 
 type PaymentService struct {
