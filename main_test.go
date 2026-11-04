@@ -1026,3 +1026,128 @@ func TestCreatePaymentRejectsMultipleJSONObjects(t *testing.T) {
 		)
 	}
 }
+
+func TestValidationUserID(t *testing.T) {
+	testCases := []struct {
+		name   string
+		userID string
+	}{
+		{
+			name:   "empty",
+			userID: "",
+		},
+		{
+			name:   "spaces",
+			userID: "   ",
+		},
+		{
+			name:   "tabs_and_newlines",
+			userID: "\t\n",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := PaymentRequest{
+				UserID:   tc.userID,
+				Amount:   "10.00",
+				Currency: "USD",
+			}
+
+			err := validatePayment(req)
+
+			if err == nil {
+				t.Fatalf("expected ErrInvalidPayment, got nil")
+			}
+
+			if !errors.Is(err, ErrInvalidPayment) {
+				t.Fatalf("expected ErrInvalidPayment, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidationCurrency(t *testing.T) {
+	testCases := []struct {
+		name     string
+		Currency string
+	}{
+		{
+			name:     "empty",
+			Currency: "",
+		},
+		{
+			name:     "spaces",
+			Currency: "   ",
+		},
+		{
+			name:     "tabs_and_newlines",
+			Currency: "\t\n",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := PaymentRequest{
+				UserID:   "user-123",
+				Amount:   "10.00",
+				Currency: tc.Currency,
+			}
+
+			err := validatePayment(req)
+
+			if err == nil {
+				t.Fatalf("expected ErrInvalidPayment, got nil")
+			}
+
+			if !errors.Is(err, ErrInvalidPayment) {
+				t.Fatalf("expected ErrInvalidPayment, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCreatePaymentUnsupportedCurrency(t *testing.T) {
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+
+	_, err := service.Create(context.Background(), "test-unsupported-currency", PaymentRequest{
+		UserID:   "user-123",
+		Amount:   "10.00",
+		Currency: "ABC",
+	})
+
+	if err == nil {
+		t.Fatal("expected ErrInvalidPayment, got nil")
+	}
+
+	if !errors.Is(err, ErrInvalidPayment) {
+		t.Fatalf("expected ErrInvalidPayment, got: %v", err)
+	}
+}
+
+func TestCreatePaymentUnknownJSONField(t *testing.T) {
+	body := `{
+		"user_id": "user-123",
+		"amount": "10.00",
+		"currency": "USD",
+		"amunt": "999"
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/payments", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "test-unknown-field")
+
+	w := httptest.NewRecorder()
+
+	store := NewPaymentStore()
+	service := NewPaymentService(store)
+	r := newRouter(service)
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d; body: %s",
+			http.StatusBadRequest, w.Code, w.Body.String())
+	}
+}

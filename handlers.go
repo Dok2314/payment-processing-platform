@@ -32,6 +32,7 @@ func createPaymentHandler(service *PaymentService, w http.ResponseWriter, r *htt
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
 
 	err := decoder.Decode(&payment)
 	if err != nil {

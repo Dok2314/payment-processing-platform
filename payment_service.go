@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -48,7 +49,7 @@ func (s *PaymentService) Create(ctx context.Context, key string, payment Payment
 
 	amount, err := ParseAmount(payment.Amount, payment.Currency)
 	if err != nil {
-		return Payment{}, fmt.Errorf("%w: %v", ErrInvalidPayment, err)
+		return Payment{}, fmt.Errorf("%w: %w", ErrInvalidPayment, err)
 	}
 
 	createdPayment := Payment{
@@ -72,10 +73,10 @@ func (s *PaymentService) Cancel(ctx context.Context, id string) (Payment, error)
 }
 
 func validatePayment(payment PaymentRequest) error {
-	if payment.UserID == "" {
+	if strings.TrimSpace(payment.UserID) == "" {
 		return fmt.Errorf("%w: user_id is required", ErrInvalidPayment)
 	}
-	if payment.Currency == "" {
+	if strings.TrimSpace(payment.Currency) == "" {
 		return fmt.Errorf("%w: currency is required", ErrInvalidPayment)
 	}
 	return nil
