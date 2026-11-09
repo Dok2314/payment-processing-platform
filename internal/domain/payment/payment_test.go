@@ -5,90 +5,78 @@ import (
 	"testing"
 )
 
-func TestNewPayment(t *testing.T) {
-	payment, err := NewPayment("payment-123", "user-123", 1500, "USD")
+func newTestMoney(t *testing.T, amount int64, currencyCode string) Money {
+	t.Helper()
+
+	currency, err := NewCurrency(currencyCode)
 	if err != nil {
-		t.Fatal("err should be nil")
+		t.Fatalf("NewCurrency() returned unexpected error: %v", err)
+	}
+
+	money, err := NewMoney(amount, *currency)
+	if err != nil {
+		t.Fatalf("NewMoney() returned unexpected error: %v", err)
+	}
+
+	return *money
+}
+
+func TestNewPayment(t *testing.T) {
+	money := newTestMoney(t, 1500, "USD")
+
+	payment, err := NewPayment("payment-123", "user-123", money)
+	if err != nil {
+		t.Fatalf("NewPayment() returned unexpected error: %v", err)
 	}
 
 	if payment == nil {
-		t.Fatal("payment should be not nil")
+		t.Fatal("expected payment to be not nil")
 	}
 
 	if payment.ID() != "payment-123" {
-		t.Fatalf("payment id should be payment-123, got %s", payment.ID())
+		t.Fatalf("expected ID payment-123, got %s", payment.ID())
 	}
 
 	if payment.UserID() != "user-123" {
-		t.Fatalf("payment userID should be user-123, got %s", payment.UserID())
+		t.Fatalf("expected UserID user-123, got %s", payment.UserID())
 	}
 
 	if payment.Amount() != 1500 {
-		t.Fatalf("payment amount should be 1500, got %d", payment.Amount())
+		t.Fatalf("expected amount 1500, got %d", payment.Amount())
 	}
 
 	if payment.Currency().Code() != "USD" {
-		t.Fatalf("payment currency should be USD, got %s", payment.Currency().Code())
+		t.Fatalf("expected currency USD, got %s", payment.Currency().Code())
 	}
 
 	if payment.Status() != PaymentStatusPending {
-		t.Fatalf("payment status should be %s, got %s", PaymentStatusPending, payment.Status())
+		t.Fatalf("expected status %s, got %s", PaymentStatusPending, payment.Status())
 	}
 }
 
 func TestNewPayment_InvalidInput(t *testing.T) {
 	tests := []struct {
-		name     string
-		id       string
-		userID   string
-		amount   int64
-		currency string
+		name   string
+		id     string
+		userID string
 	}{
 		{
-			name:     "empty ID",
-			id:       "",
-			userID:   "user-123",
-			amount:   1500,
-			currency: "USD",
+			name:   "empty ID",
+			id:     "",
+			userID: "user-123",
 		},
 		{
-			name:     "empty UserID",
-			id:       "payment-123",
-			userID:   "",
-			amount:   1500,
-			currency: "USD",
-		},
-		{
-			name:     "zero amount",
-			id:       "payment-123",
-			userID:   "user-123",
-			amount:   0,
-			currency: "USD",
-		},
-		{
-			name:     "negative amount",
-			id:       "payment-123",
-			userID:   "user-123",
-			amount:   -100,
-			currency: "USD",
-		},
-		{
-			name:     "unsupported currency",
-			id:       "payment-123",
-			userID:   "user-123",
-			amount:   1500,
-			currency: "BTC",
+			name:   "empty UserID",
+			id:     "payment-123",
+			userID: "",
 		},
 	}
 
+	money := newTestMoney(t, 1500, "USD")
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			payment, err := NewPayment(
-				tc.id,
-				tc.userID,
-				tc.amount,
-				tc.currency,
-			)
+			payment, err := NewPayment(tc.id, tc.userID, money)
 
 			if err == nil {
 				t.Fatal("expected error, got nil")
@@ -102,13 +90,13 @@ func TestNewPayment_InvalidInput(t *testing.T) {
 }
 
 func TestPayment_MoveToProcessing(t *testing.T) {
-	payment, err := NewPayment("payment-123", "user-123", 1500, "USD")
+	money := newTestMoney(t, 1500, "USD")
+	payment, err := NewPayment("payment-123", "user-123", money)
 	if err != nil {
 		t.Fatalf("NewPayment() returned unexpected error: %v", err)
 	}
 
-	err = payment.MoveToProcessing()
-	if err != nil {
+	if err := payment.MoveToProcessing(); err != nil {
 		t.Fatalf("MoveToProcessing() returned unexpected error: %v", err)
 	}
 
@@ -127,7 +115,8 @@ func TestPayment_MoveToProcessing(t *testing.T) {
 }
 
 func TestPayment_Complete(t *testing.T) {
-	payment, err := NewPayment("payment-123", "user-123", 1500, "USD")
+	money := newTestMoney(t, 1500, "USD")
+	payment, err := NewPayment("payment-123", "user-123", money)
 	if err != nil {
 		t.Fatalf("NewPayment() returned unexpected error: %v", err)
 	}
@@ -154,7 +143,8 @@ func TestPayment_Complete(t *testing.T) {
 }
 
 func TestPayment_Cancel(t *testing.T) {
-	payment, err := NewPayment("payment-123", "user-123", 1500, "USD")
+	money := newTestMoney(t, 1500, "USD")
+	payment, err := NewPayment("payment-123", "user-123", money)
 	if err != nil {
 		t.Fatalf("NewPayment() returned unexpected error: %v", err)
 	}
@@ -177,7 +167,8 @@ func TestPayment_Cancel(t *testing.T) {
 }
 
 func TestPayment_Fail(t *testing.T) {
-	payment, err := NewPayment("payment-123", "user-123", 1500, "USD")
+	money := newTestMoney(t, 1500, "USD")
+	payment, err := NewPayment("payment-123", "user-123", money)
 	if err != nil {
 		t.Fatalf("NewPayment() returned unexpected error: %v", err)
 	}
