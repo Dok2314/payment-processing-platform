@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	domainpayment "payment-processing-platform/internal/domain/payment"
@@ -10,12 +11,13 @@ import (
 type fakePaymentRepository struct {
 	savedPayment *domainpayment.Payment
 	saveCalled   bool
+	saveErr      error
 }
 
 func (fr *fakePaymentRepository) Save(ctx context.Context, payment *domainpayment.Payment) error {
 	fr.savedPayment = payment
 	fr.saveCalled = true
-	return nil
+	return fr.saveErr
 }
 
 func (fr *fakePaymentRepository) Get(ctx context.Context, id string) (*domainpayment.Payment, error) {
@@ -143,5 +145,39 @@ func TestPaymentService_Create_InvalidUserID(t *testing.T) {
 
 	if repo.saveCalled {
 		t.Fatal("repository Save should not be called")
+	}
+}
+
+func TestPaymentService_Create_RepositoryError(t *testing.T) {
+	repositoryErr := errors.New("database connection failed")
+
+	req := PaymentRequest{
+		UserID:   "user-123",
+		Amount:   "15.00",
+		Currency: "USD",
+	}
+
+	repo := &fakePaymentRepository{
+		saveErr: repositoryErr,
+	}
+
+	service := NewPaymentService(repo)
+
+	payment, err := service.Create(context.Background(), req)
+
+	if err == nil {
+		t.Fatal("expected repository error")
+	}
+
+	if !errors.Is(err, repositoryErr) {
+		t.Fatalf("expected repository error, got: %v", err)
+	}
+
+	if payment != nil {
+		t.Fatal("expected payment to be nil")
+	}
+
+	if !repo.saveCalled {
+		t.Fatal("expected repository Save to be called")
 	}
 }
