@@ -27,6 +27,6 @@ func NewCurrency(code string) (*Currency, error) {
 	}, nil
 }
 
-func (c *Currency) Code() string {
+func (c Currency) Code() string {
 	return c.code
 }

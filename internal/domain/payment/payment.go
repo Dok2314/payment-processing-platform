@@ -22,11 +22,10 @@ const (
 )
 
 type Payment struct {
-	id       string
-	userID   string
-	amount   int64
-	currency Currency
-	status   PaymentStatus
+	id     string
+	userID string
+	money  Money
+	status PaymentStatus
 }
 
 func NewPayment(id string, userId string, amount int64, currency string) (*Payment, error) {
@@ -40,19 +39,19 @@ func NewPayment(id string, userId string, amount int64, currency string) (*Payme
 		return nil, ErrInvalidPaymentUserID
 	}
 
-	if amount <= 0 {
-		return nil, ErrInvalidPaymentAmount
+	curr, err := NewCurrency(currency)
+	if err != nil {
+		return nil, err
 	}
 
-	curr, err := NewCurrency(currency)
+	money, err := NewMoney(amount, *curr)
 	if err != nil {
 		return nil, err
 	}
 
 	payment.id = id
 	payment.userID = userId
-	payment.amount = amount
-	payment.currency = *curr
+	payment.money = *money
 	payment.status = PaymentStatusPending
 
 	return &payment, nil
@@ -103,11 +102,11 @@ func (p *Payment) UserID() string {
 }
 
 func (p *Payment) Amount() int64 {
-	return p.amount
+	return p.money.Amount()
 }
 
 func (p *Payment) Currency() Currency {
-	return p.currency
+	return p.money.Currency()
 }
 
 func (p *Payment) Status() PaymentStatus {
