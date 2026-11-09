@@ -59,11 +59,15 @@ func TestPaymentService_Create_Success(t *testing.T) {
 	}
 
 	if repo.savedPayment.Status() != domainpayment.PaymentStatusPending {
-		t.Fatalf("expected status = %s, got: %s", domainpayment.PaymentStatusPending, repo.savedPayment.Status())
+		t.Fatalf(
+			"expected status = %s, got: %s",
+			domainpayment.PaymentStatusPending,
+			repo.savedPayment.Status(),
+		)
 	}
 
 	if repo.savedPayment.UserID() != "user-123" {
-		t.Fatalf("expected userID = %s, got: %s", "user-123", repo.savedPayment.UserID())
+		t.Fatalf("expected userID = user-123, got: %s", repo.savedPayment.UserID())
 	}
 }
 
@@ -106,6 +110,31 @@ func TestPaymentService_Create_InvalidAmount(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for invalid amount")
+	}
+
+	if payment != nil {
+		t.Fatal("expected payment to be nil")
+	}
+
+	if repo.saveCalled {
+		t.Fatal("repository Save should not be called")
+	}
+}
+
+func TestPaymentService_Create_InvalidUserID(t *testing.T) {
+	req := PaymentRequest{
+		UserID:   "",
+		Amount:   "15.00",
+		Currency: "USD",
+	}
+
+	repo := &fakePaymentRepository{}
+	service := NewPaymentService(repo)
+
+	payment, err := service.Create(context.Background(), req)
+
+	if err == nil {
+		t.Fatal("expected error for empty user ID")
 	}
 
 	if payment != nil {
