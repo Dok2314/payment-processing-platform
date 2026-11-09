@@ -91,3 +91,28 @@ func TestPaymentService_Create_InvalidCurrency(t *testing.T) {
 		t.Fatal("repository Save should not be called")
 	}
 }
+
+func TestPaymentService_Create_InvalidAmount(t *testing.T) {
+	req := PaymentRequest{
+		UserID:   "user-123",
+		Amount:   "abc",
+		Currency: "USD",
+	}
+
+	repo := &fakePaymentRepository{}
+	service := NewPaymentService(repo)
+
+	payment, err := service.Create(context.Background(), req)
+
+	if err == nil {
+		t.Fatal("expected error for invalid amount")
+	}
+
+	if payment != nil {
+		t.Fatal("expected payment to be nil")
+	}
+
+	if repo.saveCalled {
+		t.Fatal("repository Save should not be called")
+	}
+}
