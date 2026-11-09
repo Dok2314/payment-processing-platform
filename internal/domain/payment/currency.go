@@ -30,3 +30,7 @@ func NewCurrency(code string) (*Currency, error) {
 func (c Currency) Code() string {
 	return c.code
 }
+
+func (c Currency) DecimalPlaces() int {
+	return supportedCurrencies[c.code].decimalPlaces
+}

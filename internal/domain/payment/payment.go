@@ -28,30 +28,20 @@ type Payment struct {
 	status PaymentStatus
 }
 
-func NewPayment(id string, userId string, amount int64, currency string) (*Payment, error) {
+func NewPayment(id string, userID string, money Money) (*Payment, error) {
 	var payment Payment
 
 	if id == "" {
 		return nil, ErrInvalidPaymentID
 	}
 
-	if userId == "" {
+	if userID == "" {
 		return nil, ErrInvalidPaymentUserID
 	}
 
-	curr, err := NewCurrency(currency)
-	if err != nil {
-		return nil, err
-	}
-
-	money, err := NewMoney(amount, *curr)
-	if err != nil {
-		return nil, err
-	}
-
 	payment.id = id
-	payment.userID = userId
-	payment.money = *money
+	payment.userID = userID
+	payment.money = money
 	payment.status = PaymentStatusPending
 
 	return &payment, nil
