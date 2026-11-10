@@ -24,6 +24,10 @@ func (fr *fakePaymentRepository) Get(ctx context.Context, id string) (*domainpay
 	return nil, nil
 }
 
+func (fr *fakePaymentRepository) Update(ctx context.Context, payment *domainpayment.Payment) error {
+	return nil
+}
+
 func TestPaymentService_Create_Success(t *testing.T) {
 	req := PaymentRequest{
 		UserID:   "user-123",

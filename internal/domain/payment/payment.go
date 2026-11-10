@@ -1,6 +1,8 @@
 package payment
 
-import "errors"
+import (
+	"errors"
+)
 
 var ErrPaymentCannotBeProcessed = errors.New("payment cannot be processed")
 var ErrPaymentCannotBeCompleted = errors.New("payment cannot be completed")
@@ -43,6 +45,36 @@ func NewPayment(id string, userID string, money Money) (*Payment, error) {
 	payment.userID = userID
 	payment.money = money
 	payment.status = PaymentStatusPending
+
+	return &payment, nil
+}
+
+func ReconstitutePayment(id string, userID string, money Money, status PaymentStatus) (*Payment, error) {
+	var payment Payment
+
+	if id == "" {
+		return nil, ErrInvalidPaymentID
+	}
+
+	if userID == "" {
+		return nil, ErrInvalidPaymentUserID
+	}
+
+	payment.id = id
+	payment.userID = userID
+	payment.money = money
+
+	switch status {
+	case PaymentStatusPending,
+		PaymentStatusProcessing,
+		PaymentStatusCompleted,
+		PaymentStatusFailed,
+		PaymentStatusCancelled:
+	default:
+		return nil, errors.New("invalid payment status")
+	}
+
+	payment.status = status
 
 	return &payment, nil
 }

@@ -11,6 +11,7 @@ import (
 type PaymentRepository interface {
 	Save(ctx context.Context, payment *domainpayment.Payment) error
 	Get(ctx context.Context, id string) (*domainpayment.Payment, error)
+	Update(ctx context.Context, payment *domainpayment.Payment) error
 }
 
 type PaymentService struct {
@@ -47,6 +48,15 @@ func (s *PaymentService) Create(ctx context.Context, req PaymentRequest) (*domai
 	}
 
 	if err := s.repository.Save(ctx, payment); err != nil {
+		return nil, err
+	}
+
+	return payment, nil
+}
+
+func (s *PaymentService) Get(ctx context.Context, id string) (*domainpayment.Payment, error) {
+	payment, err := s.repository.Get(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
