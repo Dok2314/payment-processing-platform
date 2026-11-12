@@ -62,3 +62,22 @@ func (s *PaymentService) Get(ctx context.Context, id string) (*domainpayment.Pay
 
 	return payment, nil
 }
+
+func (s *PaymentService) Cancel(ctx context.Context, id string) (*domainpayment.Payment, error) {
+	payment, err := s.repository.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = payment.Cancel()
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.repository.Update(ctx, payment)
+	if err != nil {
+		return nil, err
+	}
+
+	return payment, nil
+}
