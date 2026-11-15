@@ -55,12 +55,7 @@ func (s *PaymentService) Create(ctx context.Context, req PaymentRequest) (*domai
 }
 
 func (s *PaymentService) Get(ctx context.Context, id string) (*domainpayment.Payment, error) {
-	payment, err := s.repository.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return payment, nil
+	return s.repository.Get(ctx, id)
 }
 
 func (s *PaymentService) Cancel(ctx context.Context, id string) (*domainpayment.Payment, error) {
