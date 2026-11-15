@@ -100,3 +100,22 @@ func (s *PaymentService) Process(ctx context.Context, id string) (*domainpayment
 
 	return payment, nil
 }
+
+func (s *PaymentService) Complete(ctx context.Context, id string) (*domainpayment.Payment, error) {
+	payment, err := s.repository.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = payment.Complete()
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.repository.Update(ctx, payment)
+	if err != nil {
+		return nil, err
+	}
+
+	return payment, nil
+}
