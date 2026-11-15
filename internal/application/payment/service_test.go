@@ -312,6 +312,10 @@ func TestPaymentService_Cancel_InvalidTransition(t *testing.T) {
 	if cancelledPayment != nil {
 		t.Fatal("cancelled payment should be nil")
 	}
+
+	if fakeRepo.updateCalled {
+		t.Fatal("repository Update shouldn't be called")
+	}
 }
 
 func TestPaymentService_Cancel_UpdateError(t *testing.T) {
@@ -348,6 +352,174 @@ func TestPaymentService_Cancel_UpdateError(t *testing.T) {
 	}
 
 	if cancelledPayment != nil {
+		t.Fatal("expected payment to be nil")
+	}
+
+	if !repo.updateCalled {
+		t.Fatal("expected repository Update to be called")
+	}
+}
+
+func TestPaymentService_Process_Success(t *testing.T) {
+	id := "payment-123"
+
+	currency, err := domainpayment.NewCurrency("USD")
+	if err != nil {
+		t.Fatalf("failed to create currency: %v", err)
+	}
+
+	money, err := domainpayment.NewMoney(1500, *currency)
+	if err != nil {
+		t.Fatalf("failed to create money: %v", err)
+	}
+
+	payment, err := domainpayment.NewPayment(id, "user-123", *money)
+	if err != nil {
+		t.Fatalf("failed to create payment: %v", err)
+	}
+
+	fakeRepo := fakePaymentRepository{
+		paymentToGet: payment,
+	}
+
+	service := NewPaymentService(&fakeRepo)
+
+	processedPayment, err := service.Process(context.Background(), id)
+	if err != nil {
+		t.Fatalf("failed to process payment: %v", err)
+	}
+
+	if processedPayment == nil {
+		t.Fatalf("processed payment should not be nil")
+	}
+
+	if processedPayment.Status() != domainpayment.PaymentStatusProcessing {
+		t.Fatalf("expected status = %v, got %v", domainpayment.PaymentStatusProcessing, processedPayment.Status())
+	}
+
+	if !fakeRepo.getCalled {
+		t.Fatal("repository Get should be called")
+	}
+
+	if !fakeRepo.updateCalled {
+		t.Fatal("repository Update should be called")
+	}
+
+	if fakeRepo.updatedPayment == nil {
+		t.Fatal("updated payment should not be nil")
+	}
+
+	if fakeRepo.updatedPayment.Status() != domainpayment.PaymentStatusProcessing {
+		t.Fatalf(
+			"expected updated payment status = %s, got %s",
+			domainpayment.PaymentStatusProcessing,
+			fakeRepo.updatedPayment.Status(),
+		)
+	}
+}
+
+func TestPaymentService_Process_GetError(t *testing.T) {
+	err := errors.New("database connection failed")
+
+	repo := fakePaymentRepository{
+		getErr: err,
+	}
+
+	service := NewPaymentService(&repo)
+
+	payment, processErr := service.Process(context.Background(), "payment-123")
+
+	if !errors.Is(processErr, err) {
+		t.Fatalf("expected error: %v, got %v", err, processErr)
+	}
+
+	if payment != nil {
+		t.Fatal("payment should be nil")
+	}
+
+	if repo.updateCalled {
+		t.Fatalf("update shouldn't be called")
+	}
+}
+
+func TestPaymentService_Process_InvalidTransition(t *testing.T) {
+	id := "payment-123"
+
+	currency, err := domainpayment.NewCurrency("USD")
+	if err != nil {
+		t.Fatalf("failed to create currency: %v", err)
+	}
+
+	money, err := domainpayment.NewMoney(1500, *currency)
+	if err != nil {
+		t.Fatalf("failed to create money: %v", err)
+	}
+
+	payment, err := domainpayment.NewPayment(id, "user-123", *money)
+	if err != nil {
+		t.Fatalf("failed to create payment: %v", err)
+	}
+
+	err = payment.MoveToProcessing()
+	if err != nil {
+		t.Fatalf("failed move payment to processing: %v", err)
+	}
+
+	repo := fakePaymentRepository{
+		paymentToGet: payment,
+	}
+
+	service := NewPaymentService(&repo)
+
+	processedPayment, processErr := service.Process(context.Background(), id)
+
+	if processErr == nil {
+		t.Fatal("expected error when processing payment in PROCESSING status")
+	}
+
+	if processedPayment != nil {
+		t.Fatal("processed payment should be nil")
+	}
+
+	if repo.updateCalled {
+		t.Fatal("repository Update shouldn't be called")
+	}
+}
+
+func TestPaymentService_Process_UpdateError(t *testing.T) {
+	id := "payment-123"
+
+	repoErr := errors.New("database connection failed")
+
+	currency, err := domainpayment.NewCurrency("USD")
+	if err != nil {
+		t.Fatalf("failed to create currency: %v", err)
+	}
+
+	money, err := domainpayment.NewMoney(1500, *currency)
+	if err != nil {
+		t.Fatalf("failed to create money: %v", err)
+	}
+
+	payment, err := domainpayment.NewPayment(id, "user-123", *money)
+	if err != nil {
+		t.Fatalf("failed to create payment: %v", err)
+	}
+
+	repo := fakePaymentRepository{
+		updateErr:    repoErr,
+		paymentToGet: payment,
+	}
+
+	service := NewPaymentService(&repo)
+
+	processedPayment, processErr := service.Process(context.Background(), id)
+
+	if !errors.Is(processErr, repoErr) {
+		t.Fatalf("expected err: %v, got %v", repoErr, processErr)
+	}
+
+	if processedPayment != nil {
 		t.Fatal("expected payment to be nil")
 	}
 
