@@ -9,7 +9,12 @@ import (
 )
 
 type PaymentRepository interface {
-	Save(ctx context.Context, payment *domainpayment.Payment) error
+	CreateIdempotent(
+		ctx context.Context,
+		key string,
+		payment *domainpayment.Payment,
+		payloadHash string,
+	) (*domainpayment.Payment, error)
 	Get(ctx context.Context, id string) (*domainpayment.Payment, error)
 	Update(ctx context.Context, payment *domainpayment.Payment) error
 }
@@ -24,7 +29,11 @@ func NewPaymentService(repository PaymentRepository) *PaymentService {
 	}
 }
 
-func (s *PaymentService) Create(ctx context.Context, req PaymentRequest) (*domainpayment.Payment, error) {
+func (s *PaymentService) Create(
+	ctx context.Context,
+	key string,
+	req PaymentRequest,
+) (*domainpayment.Payment, error) {
 	id := uuid.NewString()
 
 	currency, err := domainpayment.NewCurrency(req.Currency)
@@ -47,11 +56,12 @@ func (s *PaymentService) Create(ctx context.Context, req PaymentRequest) (*domai
 		return nil, err
 	}
 
-	if err := s.repository.Save(ctx, payment); err != nil {
+	payloadHash, err := calculatePayloadHash(payment)
+	if err != nil {
 		return nil, err
 	}
 
-	return payment, nil
+	return s.repository.CreateIdempotent(ctx, key, payment, payloadHash)
 }
 
 func (s *PaymentService) Get(ctx context.Context, id string) (*domainpayment.Payment, error) {

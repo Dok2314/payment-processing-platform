@@ -2,7 +2,9 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	applicationpayment "payment-processing-platform/internal/application/payment"
@@ -19,21 +21,6 @@ func NewPaymentRepository(pool *pgxpool.Pool) *PaymentRepository {
 	return &PaymentRepository{
 		pool: pool,
 	}
-}
-
-func (p *PaymentRepository) Save(ctx context.Context, payment *domainpayment.Payment) error {
-	_, err := p.pool.Exec(ctx, `
-		INSERT INTO payments(id, user_id, amount, currency, status)
-		VALUES($1, $2, $3, $4, $5)
-	`,
-		payment.ID(),
-		payment.UserID(),
-		payment.Amount(),
-		payment.Currency().Code(),
-		payment.Status(),
-	)
-
-	return err
 }
 
 func (p *PaymentRepository) Get(ctx context.Context, id string) (*domainpayment.Payment, error) {
@@ -84,13 +71,13 @@ func (p *PaymentRepository) Get(ctx context.Context, id string) (*domainpayment.
 }
 
 func (p *PaymentRepository) Update(ctx context.Context, payment *domainpayment.Payment) error {
-	_, err := p.pool.Exec(ctx, `	
+	tag, err := p.pool.Exec(ctx, `
 		UPDATE payments
 		SET user_id = $1,
-		amount = $2,
-		currency = $3,
-		status = $4,
-		updated_at = NOW()
+		    amount = $2,
+		    currency = $3,
+		    status = $4,
+		    updated_at = NOW()
 		WHERE id = $5
 	`,
 		payment.UserID(),
@@ -99,6 +86,91 @@ func (p *PaymentRepository) Update(ctx context.Context, payment *domainpayment.P
 		payment.Status(),
 		payment.ID(),
 	)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if tag.RowsAffected() == 0 {
+		return errors.New("payment not found")
+	}
+
+	return nil
+}
+
+func (p *PaymentRepository) CreateIdempotent(
+	ctx context.Context,
+	key string,
+	payment *domainpayment.Payment,
+	payloadHash string,
+) (*domainpayment.Payment, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		key,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var existingPaymentID string
+	var existingPayloadHash string
+
+	err = tx.QueryRow(ctx, `
+		SELECT payment_id, payload_hash
+		FROM idempotency_keys
+		WHERE key = $1
+	`, key).Scan(&existingPaymentID, &existingPayloadHash)
+
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	if err == nil {
+		if existingPayloadHash != payloadHash {
+			return nil, applicationpayment.ErrIdempotencyKeyReuse
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+
+		return p.Get(ctx, existingPaymentID)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO payments(id, user_id, amount, currency, status)
+		VALUES($1, $2, $3, $4, $5)
+	`,
+		payment.ID(),
+		payment.UserID(),
+		payment.Amount(),
+		payment.Currency().Code(),
+		payment.Status(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO idempotency_keys(key, payment_id, payload_hash)
+		VALUES($1, $2, $3)
+	`,
+		key,
+		payment.ID(),
+		payloadHash,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return payment, nil
 }

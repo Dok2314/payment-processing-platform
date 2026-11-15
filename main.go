@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+
+	applicationpayment "payment-processing-platform/internal/application/payment"
+	postgrespayment "payment-processing-platform/internal/infrastructure/postgres"
 )
 
 func newServer(handler http.Handler) *http.Server {
@@ -77,9 +80,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	store := NewPostgresPaymentStore(pool)
+	repository := postgrespayment.NewPaymentRepository(pool)
 
-	service := NewPaymentService(store)
+	service := applicationpayment.NewPaymentService(repository)
 
 	mux := newRouter(service)
 
