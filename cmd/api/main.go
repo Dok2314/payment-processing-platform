@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -33,7 +34,7 @@ func runServer(server *http.Server) error {
 
 	defer signal.Stop(quit)
 
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
@@ -68,7 +69,7 @@ func runServer(server *http.Server) error {
 	return err
 }
 
-func main() {
+func run() error {
 	ctx := context.Background()
 
 	if err := godotenv.Load(); err != nil {
@@ -77,21 +78,27 @@ func main() {
 
 	pool, err := postgrespayment.NewPostgresPool(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize postgres: %w", err)
 	}
 	defer pool.Close()
 
 	repository := postgrespayment.NewPaymentRepository(pool)
-
 	service := applicationpayment.NewPaymentService(repository)
+	router := httptransport.NewRouter(service)
 
-	mux := httptransport.NewRouter(service)
+	server := newServer(router)
 
-	server := newServer(mux)
+	if err := runServer(server); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("run HTTP server: %w", err)
+	}
 
-	err = runServer(server)
+	return nil
+}
 
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Server failed: %v", err)
+func main() {
+	if err := run(); err != nil {
+		log.Printf("Application failed: %v", err)
+		os.Exit(1)
 	}
 }
