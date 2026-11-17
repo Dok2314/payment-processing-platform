@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"encoding/json"
@@ -45,4 +45,14 @@ func createPaymentHTTPHandler(
 	if err := json.NewEncoder(w).Encode(payment); err != nil {
 		log.Printf("failed to encode payment response: %v", err)
 	}
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("1.0.0"))
 }

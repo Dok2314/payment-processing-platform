@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"net/http"
@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func newRouter(service *applicationpayment.PaymentService) chi.Router {
+func NewRouter(service *applicationpayment.PaymentService) chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
