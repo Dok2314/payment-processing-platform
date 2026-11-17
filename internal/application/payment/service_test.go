@@ -320,7 +320,7 @@ func TestPaymentService_Cancel_GetError(t *testing.T) {
 }
 
 func TestPaymentService_Cancel_InvalidTransition(t *testing.T) {
-	payment := newTestPayment(t, domainpayment.PaymentStatusProcessing)
+	payment := newTestPayment(t, domainpayment.PaymentStatusCompleted)
 
 	repo := &fakePaymentRepository{
 		paymentToGet: payment,
@@ -331,7 +331,7 @@ func TestPaymentService_Cancel_InvalidTransition(t *testing.T) {
 	cancelledPayment, err := service.Cancel(context.Background(), "payment-123")
 
 	if err == nil {
-		t.Fatal("expected error when cancelling payment in PROCESSING status")
+		t.Fatal("expected error when cancelling payment in COMPLETED status")
 	}
 
 	if cancelledPayment != nil {
