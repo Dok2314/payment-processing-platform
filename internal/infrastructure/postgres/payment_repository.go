@@ -43,7 +43,12 @@ func (p *PaymentRepository) Get(ctx context.Context, id string) (*domainpayment.
 		&currencyCode,
 		&status,
 	)
+
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, applicationpayment.ErrPaymentNotFound
+		}
+
 		return nil, err
 	}
 
@@ -91,7 +96,7 @@ func (p *PaymentRepository) Update(ctx context.Context, payment *domainpayment.P
 	}
 
 	if tag.RowsAffected() == 0 {
-		return errors.New("payment not found")
+		return applicationpayment.ErrPaymentNotFound
 	}
 
 	return nil
