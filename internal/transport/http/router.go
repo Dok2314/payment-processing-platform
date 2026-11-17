@@ -20,5 +20,9 @@ func NewRouter(service *applicationpayment.PaymentService) chi.Router {
 		createPaymentHTTPHandler(service, w, r)
 	})
 
+	r.Get("/payments/{id}", func(w http.ResponseWriter, r *http.Request) {
+		getPaymentHTTPHandler(service, w, r)
+	})
+
 	return r
 }

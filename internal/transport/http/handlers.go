@@ -8,7 +8,19 @@ import (
 	"strings"
 
 	applicationpayment "payment-processing-platform/internal/application/payment"
+
+	"github.com/go-chi/chi/v5"
 )
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
+}
+
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("1.0.0"))
+}
 
 func createPaymentHTTPHandler(
 	service *applicationpayment.PaymentService,
@@ -42,17 +54,33 @@ func createPaymentHTTPHandler(
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
-	if err := json.NewEncoder(w).Encode(payment); err != nil {
+	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
 		log.Printf("failed to encode payment response: %v", err)
 	}
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
-}
+func getPaymentHTTPHandler(
+	service *applicationpayment.PaymentService,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	id := chi.URLParam(r, "id")
 
-func versionHandler(w http.ResponseWriter, r *http.Request) {
+	payment, err := service.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, applicationpayment.ErrPaymentNotFound) {
+			http.Error(w, "payment not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(w, "failed to get payment", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("1.0.0"))
+
+	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
+		log.Printf("failed to encode payment response: %v", err)
+	}
 }
