@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,7 +42,7 @@ func runServer(server *http.Server) error {
 
 		select {
 		case <-quit:
-			log.Println("Shutdown signal received")
+			slog.Info("Shutdown signal received")
 		case <-serverStopped:
 			return
 		}
@@ -51,9 +51,9 @@ func runServer(server *http.Server) error {
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("Server shutdown failed: %v", err)
+			slog.Error("Server shutdown failed", "error", err)
 		} else {
-			log.Println("Server stopped gracefully")
+			slog.Info("Server stopped gracefully")
 		}
 	}()
 
@@ -73,7 +73,7 @@ func run() error {
 	ctx := context.Background()
 
 	if err := godotenv.Load(); err != nil {
-		log.Println(".env file not found, using environment variables")
+		slog.Info(".env file not found, using environment variables")
 	}
 
 	pool, err := postgrespayment.NewPostgresPool(ctx)
@@ -97,8 +97,16 @@ func run() error {
 }
 
 func main() {
+	logger := slog.New(
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}),
+	)
+
+	slog.SetDefault(logger)
+
 	if err := run(); err != nil {
-		log.Printf("Application failed: %v", err)
+		slog.Error("Application failed", "error", err)
 		os.Exit(1)
 	}
 }
