@@ -12,6 +12,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+
+	applicationpayment "payment-processing-platform/internal/application/payment"
+	postgrespayment "payment-processing-platform/internal/infrastructure/postgres"
+	httptransport "payment-processing-platform/internal/transport/http"
 )
 
 func newServer(handler http.Handler) *http.Server {
@@ -71,17 +75,17 @@ func main() {
 		log.Println(".env file not found, using environment variables")
 	}
 
-	pool, err := NewPostgresPool(ctx)
+	pool, err := postgrespayment.NewPostgresPool(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
 
-	store := NewPostgresPaymentStore(pool)
+	repository := postgrespayment.NewPaymentRepository(pool)
 
-	service := NewPaymentService(store)
+	service := applicationpayment.NewPaymentService(repository)
 
-	mux := newRouter(service)
+	mux := httptransport.NewRouter(service)
 
 	server := newServer(mux)
 
