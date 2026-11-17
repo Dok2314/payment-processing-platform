@@ -89,7 +89,8 @@ func (p *Payment) Complete() error {
 }
 
 func (p *Payment) Cancel() error {
-	if p.status != PaymentStatusPending {
+	if p.status != PaymentStatusPending &&
+		p.status != PaymentStatusProcessing {
 		return ErrPaymentCannotBeCancelled
 	}
 
