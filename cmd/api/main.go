@@ -72,8 +72,8 @@ func runServer(server *http.Server) error {
 func run() error {
 	ctx := context.Background()
 
-	if err := godotenv.Load(); err != nil {
-		slog.Info(".env file not found, using environment variables")
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("load .env: %w", err)
 	}
 
 	pool, err := postgrespayment.NewPostgresPool(ctx)
