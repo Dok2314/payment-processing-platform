@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func requestLogger(next http.Handler) http.Handler {
@@ -39,6 +40,7 @@ func NewRouter(service *applicationpayment.PaymentService) chi.Router {
 
 	r.Get("/health", healthHandler)
 	r.Get("/version", versionHandler)
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 
 	r.Post("/payments", func(w http.ResponseWriter, r *http.Request) {
 		createPaymentHTTPHandler(service, w, r)
