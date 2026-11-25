@@ -38,5 +38,12 @@ services:
     environment:
       ADMINER_DEFAULT_SERVER: postgres
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports: 
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
 volumes:
   postgres_data:

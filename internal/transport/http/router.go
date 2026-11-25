@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	applicationpayment "payment-processing-platform/internal/application/payment"
@@ -19,6 +20,13 @@ func requestLogger(next http.Handler) http.Handler {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
 		next.ServeHTTP(ww, r)
+
+		if r.URL.Path != "/metrics" {
+			httpRequestsTotal.WithLabelValues(
+				r.Method,
+				strconv.Itoa(ww.Status()),
+			).Inc()
+		}
 
 		slog.Info(
 			"HTTP request",
