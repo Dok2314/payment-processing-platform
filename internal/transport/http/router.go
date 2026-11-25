@@ -26,6 +26,11 @@ func requestLogger(next http.Handler) http.Handler {
 				r.Method,
 				strconv.Itoa(ww.Status()),
 			).Inc()
+
+			httpRequestDuration.WithLabelValues(
+				r.Method,
+				strconv.Itoa(ww.Status()),
+			).Observe(time.Since(start).Seconds())
 		}
 
 		slog.Info(
