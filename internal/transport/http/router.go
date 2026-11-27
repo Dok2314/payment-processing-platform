@@ -31,17 +31,17 @@ func requestLogger(next http.Handler) http.Handler {
 				r.Method,
 				strconv.Itoa(ww.Status()),
 			).Observe(time.Since(start).Seconds())
-		}
 
-		slog.Info(
-			"HTTP request",
-			"request_id", middleware.GetReqID(r.Context()),
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", ww.Status(),
-			"bytes", ww.BytesWritten(),
-			"duration", time.Since(start),
-		)
+			slog.Info(
+				"HTTP request",
+				"request_id", middleware.GetReqID(r.Context()),
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.Status(),
+				"bytes", ww.BytesWritten(),
+				"duration", time.Since(start),
+			)
+		}
 	})
 }
 
