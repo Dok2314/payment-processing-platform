@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 
 	applicationpayment "payment-processing-platform/internal/application/payment"
+	"payment-processing-platform/internal/infrastructure/observability"
 	postgrespayment "payment-processing-platform/internal/infrastructure/postgres"
 	httptransport "payment-processing-platform/internal/transport/http"
 )
@@ -33,7 +35,7 @@ func runServer(server *http.Server) error {
 
 	defer signal.Stop(quit)
 
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
@@ -41,7 +43,7 @@ func runServer(server *http.Server) error {
 
 		select {
 		case <-quit:
-			log.Println("Shutdown signal received")
+			slog.Info("Shutdown signal received")
 		case <-serverStopped:
 			return
 		}
@@ -50,9 +52,9 @@ func runServer(server *http.Server) error {
 		defer cancel()
 
 		if err := server.Shutdown(ctx); err != nil {
-			log.Printf("Server shutdown failed: %v", err)
+			slog.Error("Server shutdown failed", "error", err)
 		} else {
-			log.Println("Server stopped gracefully")
+			slog.Info("Server stopped gracefully")
 		}
 	}()
 
@@ -68,30 +70,66 @@ func runServer(server *http.Server) error {
 	return err
 }
 
-func main() {
+func run() error {
 	ctx := context.Background()
 
-	if err := godotenv.Load(); err != nil {
-		log.Println(".env file not found, using environment variables")
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("load .env: %w", err)
 	}
+
+	// Initialize OpenTelemetry TracerProvider.
+	shutdownTracer, err := observability.InitTracer(ctx)
+	if err != nil {
+		return fmt.Errorf("initialize tracer: %w", err)
+	}
+
+	// Flush pending spans and shut down TracerProvider
+	// after the HTTP server has stopped.
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := shutdownTracer(shutdownCtx); err != nil {
+			slog.Error("Tracer shutdown failed", "error", err)
+		} else {
+			slog.Info("Tracer stopped gracefully")
+		}
+	}()
 
 	pool, err := postgrespayment.NewPostgresPool(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("initialize postgres: %w", err)
 	}
 	defer pool.Close()
 
 	repository := postgrespayment.NewPaymentRepository(pool)
-
 	service := applicationpayment.NewPaymentService(repository)
+	router := httptransport.NewRouter(service)
 
-	mux := httptransport.NewRouter(service)
+	server := newServer(router)
 
-	server := newServer(mux)
+	if err := runServer(server); err != nil &&
+		!errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("run HTTP server: %w", err)
+	}
 
-	err = runServer(server)
+	return nil
+}
 
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Server failed: %v", err)
+func main() {
+	logger := slog.New(
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		}),
+	)
+
+	slog.SetDefault(logger)
+
+	if err := run(); err != nil {
+		slog.Error("Application failed", "error", err)
+		os.Exit(1)
 	}
 }

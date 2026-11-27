@@ -3,7 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -55,7 +55,7 @@ func createPaymentHTTPHandler(
 	w.WriteHeader(http.StatusCreated)
 
 	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
-		log.Printf("failed to encode payment response: %v", err)
+		slog.Error("Failed to encode payment response", "error", err)
 	}
 }
 
@@ -81,7 +81,7 @@ func getPaymentHTTPHandler(
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
-		log.Printf("failed to encode payment response: %v", err)
+		slog.Error("Failed to encode payment response", "error", err)
 	}
 }
 
@@ -112,7 +112,7 @@ func moveToProcessingHTTPHandler(
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
-		log.Printf("failed to encode payment response: %v", err)
+		slog.Error("Failed to encode payment response", "error", err)
 	}
 }
 
@@ -143,7 +143,7 @@ func completePaymentHTTPHandler(
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
-		log.Printf("failed to encode payment response: %v", err)
+		slog.Error("Failed to encode payment response", "error", err)
 	}
 }
 
@@ -174,6 +174,6 @@ func cancelPaymentHTTPHandler(
 	w.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(w).Encode(newPaymentResponse(payment)); err != nil {
-		log.Printf("failed to encode payment response: %v", err)
+		slog.Error("Failed to encode payment response", "error", err)
 	}
 }
