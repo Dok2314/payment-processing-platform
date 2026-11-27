@@ -15,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 
 	applicationpayment "payment-processing-platform/internal/application/payment"
+	"payment-processing-platform/internal/infrastructure/observability"
 	postgrespayment "payment-processing-platform/internal/infrastructure/postgres"
 	httptransport "payment-processing-platform/internal/transport/http"
 )
@@ -75,6 +76,28 @@ func run() error {
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("load .env: %w", err)
 	}
+
+	// Initialize OpenTelemetry TracerProvider.
+	shutdownTracer, err := observability.InitTracer(ctx)
+	if err != nil {
+		return fmt.Errorf("initialize tracer: %w", err)
+	}
+
+	// Flush pending spans and shut down TracerProvider
+	// after the HTTP server has stopped.
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := shutdownTracer(shutdownCtx); err != nil {
+			slog.Error("Tracer shutdown failed", "error", err)
+		} else {
+			slog.Info("Tracer stopped gracefully")
+		}
+	}()
 
 	pool, err := postgrespayment.NewPostgresPool(ctx)
 	if err != nil {
